@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Display</title>
+    <link rel="stylesheet" href="./public/stylesheet.css" />
+
+</head>
+<body>
+<div class="header">
+    <h1>Kitchen V2</h1>
+    <h1 class="time headerChild">connecting...</h1>
+    <div class="credentials headerChild">
+        <div class="username headerChild">
+            <label for="username">Username: </label>
+            <input type="text" id="username" />
+        </div>
+        <div class="password headerChild">
+            <label for="password">Password: </label>
+            <input type="password" id="password" />
+        </div>
+        <button id="login" class="headerChild">Check</button>
+    </div>
+</div>
+
+<div class="orders-grid">
+    <div class="order-card">
+        <div class="order-header">
+            Table 5<br>
+            Staff Name<br>
+            Order ID: 1023
+        </div>
+        <div class="order-body">
+            <div class="item">
+                <div class="item-name">Item 1</div>
+                <div class="item-comment">comment 1</div>
+            </div>
+            <div class="item">
+                <div class="item-name">Item 2</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="order-card">
+        <div class="order-header">
+            Table 2<br>
+            Staff Name<br>
+            Order ID: 1024
+        </div>
+        <div class="order-body">
+            <div class="item">
+                <div class="item-name">Item 1</div>
+            </div>
+            <div class="item">
+                <div class="item-name">Item 2</div>
+                <div class="item-comment">extra sauce</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="order-card">
+        <div class="order-header">
+            Table 8<br>
+            Staff Name<br>
+            Order ID: 1025
+        </div>
+        <div class="order-body">
+            <div class="item">
+                <div class="item-name">Item 1</div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+</body>
+<footer>
+    <script src="./public/script.js"></script>
+</footer>
+
+</html>
