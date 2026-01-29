@@ -29,6 +29,7 @@ body {
 .orders-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-auto-rows: var(--order-card-height, 320px);
     gap: 20px;
 }
 
@@ -36,26 +37,36 @@ body {
 .order-card {
     background: #fff;
     border: 4px solid #000;
-    height: 320px;
+    height: var(--order-card-height, 320px);
+    max-height: var(--order-card-height, 320px);
     display: flex;
     flex-direction: column;
 }
 
 /* Header section */
-.order-header {
-    border-bottom: 4px solid #000;
+.order-header, .order-footer{
     padding: 10px;
     text-align: center;
     font-weight: bold;
     line-height: 1.4;
 }
 
+.order-header {
+    border-bottom: 4px solid #000;
+}
+
+.order-footer {
+    border-top: 4px solid #000;
+}
 /* Body section */
 .order-body {
     padding: 12px;
     flex: 1;
-    overflow-y: auto;
+    overflow-y: hidden;
+    line-height: 1.4;
+
 }
+
 
 .item {
     margin-bottom: 14px;
@@ -69,4 +80,9 @@ body {
     margin-left: 10px;
     font-size: 0.9em;
     color: #333;
+}
+
+.order-continued {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
 }

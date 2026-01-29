@@ -9,15 +9,15 @@
 <body>
 <div class="header">
     <h1>Kitchen V2</h1>
-    <h1 class="time headerChild">connecting...</h1>
-    <div class="credentials headerChild">
+    <h1 class="headerChild" id="connected">connecting...</h1>
+    <div class="credentials headerChild" id="credentials">
         <div class="username headerChild">
             <label for="username">Username: </label>
-            <input type="text" id="username" />
+            <input type="text" id="username" autocomplete="username" />
         </div>
         <div class="password headerChild">
             <label for="password">Password: </label>
-            <input type="password" id="password" />
+            <input type="password" id="password" autocomplete="current-password"/>
         </div>
         <button id="login" class="headerChild">Check</button>
     </div>
@@ -26,8 +26,8 @@
 <div class="orders-grid">
     <div class="order-card">
         <div class="order-header">
-            Table 5<br>
-            Staff Name<br>
+            Table: <br>
+            Staff: <br>
             Order ID: 1023
         </div>
         <div class="order-body">
@@ -38,6 +38,12 @@
             <div class="item">
                 <div class="item-name">Item 2</div>
             </div>
+        </div>
+        <div class="order-footer">
+            <div class="order-time">
+                Time of order: <time id="timeOfOrder">10:10</time>
+            </div>
+            <button class="order-button">Complete Order</button>
         </div>
     </div>
 
@@ -76,6 +82,7 @@
 </body>
 <footer>
     <script src="./public/script.js"></script>
+    <script src="./public/cards.js"></script>
 </footer>
 
 </html>
