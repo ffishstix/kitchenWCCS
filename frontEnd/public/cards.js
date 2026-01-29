@@ -9,6 +9,7 @@ function formatOrderTime(sentDateTime) {
 
 let lastCardsData = null;
 let resizeTimer = null;
+const logWith = window.logWith;
 
 function getOrderCardHeight(container) {
     if (!container) return 320;
@@ -128,12 +129,23 @@ function createCards(cardsData) {
     const container = document.querySelector(".orders-grid");
     if (!container || !Array.isArray(cardsData)) return;
 
-    lastCardsData = cardsData;
+    const deduped = [];
+    const seen = new Set();
+    for (const row of cardsData) {
+        const lineId = Number(row?.orderLineId);
+        if (Number.isInteger(lineId)) {
+            if (seen.has(lineId)) continue;
+            seen.add(lineId);
+        }
+        deduped.push(row);
+    }
+
+    lastCardsData = deduped;
     setOrderCardHeight(container);
     container.textContent = "";
     const orders = new Map();
 
-    for (const row of cardsData) {
+    for (const row of deduped) {
         if (!row || row.orderId == null) continue;
 
         let order = orders.get(row.orderId);
@@ -175,20 +187,21 @@ function createCards(cardsData) {
                 body.removeChild(itemEl);
                 const nextCard = buildOrderCard(order, true);
                 container.appendChild(nextCard.card);
-                console.log("[cards] Continued order", { orderId: order.orderId, cardIndex });
+                logWith("log", "cards", "Continued order", { orderId: order.orderId, cardIndex });
                 cardIndex += 1;
                 body = nextCard.body;
                 body.appendChild(itemEl);
 
                 if (body.scrollHeight > body.clientHeight && body.childElementCount === 1) {
-                    console.warn("[cards] Item too tall for card", { orderId: order.orderId });
+                    logWith("warn", "cards", "Item too tall for card", { orderId: order.orderId });
                     body.style.overflowY = "auto";
                 }
             }
         }
     }
 
-    console.log("[cards] Created", orders.size);
+    if (orders.size === 0) logWith("warn", "cards", "No orders to display");
+    else logWith("log", "cards", "Created", orders.size);
 
 }
 
@@ -196,7 +209,7 @@ function createCards(cardsData) {
 async function finishOrder(orderId, button) {
     const id = Number(orderId);
     if (!Number.isInteger(id)) {
-        console.warn("[order] Invalid orderId", orderId);
+        logWith("warn", "order", "Invalid orderId", orderId);
         return;
     }
 
@@ -209,23 +222,31 @@ async function finishOrder(orderId, button) {
         });
 
         if (!res.ok) {
-            console.warn("[order] Failed to finish order", id);
+            logWith("error", "order", "Failed to finish order", id);
             return;
         }
 
         const data = await res.json();
         if (!data.success) {
-            console.warn("[order] Finish order rejected", id);
+            logWith("error", "order", "Finish order rejected", id);
             return;
         }
 
-        console.log("[order] Finished", id);
-        if (button) {
+        logWith("log", "order", "Finished", id);
+        const cache = Array.isArray(window.ordersCache) ? window.ordersCache : lastCardsData;
+        if (Array.isArray(cache)) {
+            const filtered = cache.filter(item => item?.orderId !== id);
+            if (typeof window.setOrdersCache === "function") {
+                window.setOrdersCache(filtered);
+            } else {
+                createCards(filtered);
+            }
+        } else if (button) {
             const card = button.closest(".order-card");
             if (card) card.remove();
         }
     } catch (err) {
-        console.error("[order] Finish order error", err);
+        logWith("error", "order", "Finish order error", err);
     } finally {
         if (button) button.disabled = false;
     }

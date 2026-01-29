@@ -7,6 +7,7 @@ const wss = new WebSocket.Server({ port: 8080 });
 const app = express();
 const PORT = 3000;
 const crypto = require('crypto');
+const { logWith } = require("./logger");
 const {
     ensureAuthTokensTable,
     saveToken,
@@ -38,12 +39,12 @@ const serverHash = crypto
     .createHash("sha256")
     .update(process.env.DB_USER + process.env.DB_PASSWORD)
     .digest("hex");
-console.log(dbConfig.user);
+logWith("log", "config", "dbUser configured");
 
 wss.on("connection", async (ws, req) => {
     const params = new URLSearchParams(req.url.replace("/?", ""));
     const token = params.get("token");
-    console.log("[ws] Connection attempt", { hasToken: !!token });
+    logWith("log", "ws", "Connection attempt");
 
     try {
         await ensureAuthReady();
@@ -53,52 +54,110 @@ wss.on("connection", async (ws, req) => {
         if (!expiresAt || Number.isNaN(expiresAtMs) || Date.now() > expiresAtMs) {
             if (expiresAt) {
                 await deleteToken(dbPool, token);
-                console.warn("[auth] Token expired", { token: formatTokenForLog(token) });
+                logWith("warn", "auth", "Token expired");
             } else {
-                console.warn("[auth] Token missing or unknown", { token: formatTokenForLog(token) });
+                logWith("warn", "auth", "Token missing or unknown");
             }
             ws.close();
             return;
         }
-        console.log("[auth] Token accepted", {
-            token: formatTokenForLog(token),
-            expiresAt: new Date(expiresAt).toISOString()
-        });
+        logWith("log", "auth", "Token accepted");
     } catch (err) {
-        console.error("[auth] Token validation failed", err);
+        logWith("error", "auth", "Token validation failed");
         ws.close();
         return;
     }
 
-    console.log("Authenticated client connected");
+    logWith("log", "ws", "Authenticated client connected");
 
-    const sendFood = async () => {
+    let lastOrderLineId = 0;
+
+    const sendFullFood = async () => {
         try {
             const items = await getFoodToBeMade();
+            lastOrderLineId = getMaxOrderLineId(items, lastOrderLineId);
             ws.send(JSON.stringify({
-                type: "food",
+                type: "orders-full",
                 success: true,
                 value: items
             }));
         } catch {
             ws.send(JSON.stringify({
-                type: "food",
+                type: "orders-full",
                 success: false,
                 error: "Database error"
             }));
         }
     };
 
-    await sendFood();
-    const interval = setInterval(sendFood, 5000);
+    const sendDeltaFood = async () => {
+        try {
+            const items = await getFoodToBeMadeSince(lastOrderLineId);
+            if (items.length === 0) return;
+            lastOrderLineId = getMaxOrderLineId(items, lastOrderLineId);
+            ws.send(JSON.stringify({
+                type: "orders-delta",
+                success: true,
+                value: items
+            }));
+        } catch {
+            ws.send(JSON.stringify({
+                type: "orders-delta",
+                success: false,
+                error: "Database error"
+            }));
+        }
+    };
+
+    const handleSyncConfirm = async (clientItems) => {
+        try {
+            const serverItems = await getFoodToBeMade();
+            const match = listsMatch(serverItems, clientItems);
+            if (match) {
+                ws.send(JSON.stringify({
+                    type: "sync-result",
+                    success: true
+                }));
+                return;
+            }
+
+            lastOrderLineId = getMaxOrderLineId(serverItems, lastOrderLineId);
+            ws.send(JSON.stringify({
+                type: "sync-result",
+                success: false,
+                value: serverItems
+            }));
+        } catch {
+            ws.send(JSON.stringify({
+                type: "sync-result",
+                success: false,
+                error: "Database error"
+            }));
+        }
+    };
+
+    await sendFullFood();
+    const interval = setInterval(sendDeltaFood, 5000);
 
     ws.on("close", () => clearInterval(interval));
+    ws.on("message", async (data) => {
+        let message;
+        try {
+            message = JSON.parse(data.toString());
+        } catch {
+            return;
+        }
+
+        if (message?.type === "sync-confirm") {
+            await handleSyncConfirm(Array.isArray(message.value) ? message.value : []);
+        }
+    });
 });
 
 async function getFoodToBeMade(){
     if (!pool) pool = await sql.connect(dbConfig);
 
-    const query = 'select o.Id as orderId, ai.itemName as itemName, ol.message as message, s.name as staffName,\n' +
+    const query = 'select o.Id as orderId, oL.Id as orderLineId, ai.itemName as itemName, ol.message as message, s.name as staffName,\n' +
         '       h.tableNumber as tableNumber, h.sentDateTime as sentDateTime\n' +
         'from allItems as ai, orderLine as oL, orders as o, headers as h, staff as s\n' +
         'where o.headerId = h.Id\n' +
@@ -110,8 +169,10 @@ async function getFoodToBeMade(){
         'order by oL.Id asc';
 
     const result = await pool.request().query(query);
+    logWith("log", "db", "setting order to api");
     return result.recordset.map(row => ({
         orderId: row.orderId,
+        orderLineId: row.orderLineId,
         itemName: row.itemName,
         message: row.message,
         staffName: row.staffName,
@@ -119,6 +180,83 @@ async function getFoodToBeMade(){
         sentDateTime: row.sentDateTime
     }));
 
+}
+
+async function getFoodToBeMadeSince(lastOrderLineId){
+    if (!pool) pool = await sql.connect(dbConfig);
+
+    const query = 'select o.Id as orderId, oL.Id as orderLineId, ai.itemName as itemName, ol.message as message, s.name as staffName,\n' +
+        '       h.tableNumber as tableNumber, h.sentDateTime as sentDateTime\n' +
+        'from allItems as ai, orderLine as oL, orders as o, headers as h, staff as s\n' +
+        'where o.headerId = h.Id\n' +
+        '    and oL.orderId = o.Id\n' +
+        '    and h.finished = 0\n' +
+        '    and ai.madeInKitchen = 1\n' +
+        '    and s.Id = h.staffId\n' +
+        '    and oL.Id > @lastOrderLineId\n' +
+        '\n' +
+        'order by oL.Id asc';
+
+    const result = await pool
+        .request()
+        .input("lastOrderLineId", sql.Int, Number(lastOrderLineId) || 0)
+        .query(query);
+    return result.recordset.map(row => ({
+        orderId: row.orderId,
+        orderLineId: row.orderLineId,
+        itemName: row.itemName,
+        message: row.message,
+        staffName: row.staffName,
+        tableNumber: row.tableNumber,
+        sentDateTime: row.sentDateTime
+    }));
+}
+
+function getMaxOrderLineId(items, fallback) {
+    if (!Array.isArray(items) || items.length === 0) return fallback;
+    let max = fallback || 0;
+    for (const item of items) {
+        const value = Number(item?.orderLineId);
+        if (Number.isInteger(value) && value > max) max = value;
+    }
+    return max;
+}
+
+function listsMatch(serverItems, clientItems) {
+    if (!Array.isArray(serverItems) || !Array.isArray(clientItems)) return false;
+    if (serverItems.length !== clientItems.length) return false;
+
+    const serverKeys = serverItems.map(makeOrderKey).sort();
+    const clientKeys = clientItems.map(makeOrderKey).sort();
+
+    for (let i = 0; i < serverKeys.length; i += 1) {
+        if (serverKeys[i] !== clientKeys[i]) return false;
+    }
+    return true;
+}
+
+function makeOrderKey(item) {
+    const orderLineId = Number(item?.orderLineId);
+    if (Number.isInteger(orderLineId)) {
+        return `line:${orderLineId}`;
+    }
+
+    const sentDateTime = normalizeDateTime(item?.sentDateTime);
+    return [
+        item?.orderId ?? "",
+        item?.itemName ?? "",
+        item?.message ?? "",
+        item?.staffName ?? "",
+        item?.tableNumber ?? "",
+        sentDateTime
+    ].join("|");
+}
+
+function normalizeDateTime(value) {
+    if (!value) return "";
+    const date = value instanceof Date ? value : new Date(value);
+    if (!Number.isNaN(date.getTime())) return date.toISOString();
+    return String(value);
 }
 
 async function finishOrder(orderId){
@@ -145,18 +283,12 @@ async function getPool() {
     return pool;
 }
 
-function formatTokenForLog(token) {
-    if (!token) return "missing";
-    if (token.length <= 8) return token;
-    return `${token.slice(0, 4)}...${token.slice(-4)}`;
-}
-
 async function ensureAuthReady() {
     if (!authTableReady) {
         authTableReady = (async () => {
             const dbPool = await getPool();
             await ensureAuthTokensTable(dbPool);
-            console.log("[auth] Token table ready");
+            logWith("log", "auth", "Token table ready");
         })();
     }
 
@@ -175,10 +307,10 @@ function startTokenCleanupLoop() {
             const dbPool = await getPool();
             const cleaned = await cleanupExpiredTokens(dbPool);
             if (cleaned > 0) {
-                console.log(`[auth] Cleaned ${cleaned} expired tokens`);
-            }
-        } catch (err) {
-            console.error("[auth] Cleanup failed", err);
+            logWith("log", "auth", "Cleaned expired tokens");
+        }
+    } catch (err) {
+            logWith("error", "auth", "Cleanup failed");
         }
     }, TOKEN_CLEANUP_INTERVAL_MS);
 }
@@ -187,35 +319,13 @@ app.get("/", (req, res) => {
     res.sendFile(indexPath);
 });
 
-app.post("/api/connect", async (req, res) => {
-    try {
-        const dbPool = await getPool();
-
-        const result = await dbPool
-            .request()
-            .query("SELECT GETDATE() AS serverTime");
-
-        const time = result.recordset?.[0]?.serverTime ?? null;
-
-        res.json({
-            success: !!time,
-            time
-        });
-    } catch (err) {
-        console.error("DB error:", err);
-        res.status(500).json({
-            success: false,
-            error: "Database connection failed"
-        });
-    }
-});
 
 
 
 app.post("/api/login", async (req, res) => {
     const { credentialHash } = req.body;
 
-    console.log("[login] Attempt");
+    logWith("log", "login", "Attempt");
 
     // Reproduce the same hash on the server
 
@@ -228,18 +338,15 @@ app.post("/api/login", async (req, res) => {
             await ensureAuthReady();
             const dbPool = await getPool();
             await saveToken(dbPool, token, expiresAt);
-            console.log("[login] Success", {
-                token: formatTokenForLog(token),
-                expiresAt: expiresAt.toISOString()
-            });
+            logWith("log", "login", "Success");
             res.json({ token });
         } catch (err) {
-            console.error("[login] Token save failed", err);
+            logWith("error", "login", "Token save failed");
             res.status(500).json({ success: false, error: "Token store error" });
         }
     } else {
-        console.log(credentialHash + "  is not equal to " + serverHash);
-        console.warn("[login] Failed");
+        logWith("warn", "login", "Hash mismatch");
+        logWith("warn", "login", "Failed");
         res.status(401).json({ success: false });
     }
 });
@@ -256,26 +363,26 @@ app.post("/api/finish-order", async (req, res) => {
         await finishOrder(orderId);
         res.json({ success: true });
     } catch (err) {
-        console.error("Finish order error:", err);
+        logWith("error", "order", "Finish order error");
         res.status(500).json({ success: false, error: "Failed to finish order" });
     }
 });
 
 
 app.listen(PORT, async () => {
-    console.log(`Server running on port ${PORT}`);
+    logWith("log", "server", "Server running");
 
     try {
         await getPool();
-        console.log("MSSQL connection pool established");
+        logWith("log", "db", "MSSQL connection pool established");
         await ensureAuthReady();
         const dbPool = await getPool();
         const cleaned = await cleanupExpiredTokens(dbPool);
         if (cleaned > 0) {
-            console.log(`[auth] Cleaned ${cleaned} expired tokens on startup`);
+            logWith("log", "auth", "Cleaned expired tokens on startup");
         }
         startTokenCleanupLoop();
     } catch (err) {
-        console.error("Failed to connect to MSSQL on startup:", err);
+        logWith("error", "db", "Failed to connect to MSSQL on startup");
     }
 });
