@@ -1,3 +1,12 @@
+process.on("uncaughtException", err => {
+    console.error("Uncaught Exception:", err);
+});
+
+process.on("unhandledRejection", err => {
+    console.error("Unhandled Promise Rejection:", err);
+});
+
+
 const express = require("express");
 const sql = require("mssql");
 const path = require("path");
@@ -5,7 +14,7 @@ require("dotenv").config();
 const WebSocket = require('ws');
 const wss = new WebSocket.Server({ port: 8080 });
 const app = express();
-const PORT = 3000;
+const PORT = 1248;
 const crypto = require('crypto');
 const { logWith } = require("./logger");
 const {
