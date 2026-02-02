@@ -8,12 +8,14 @@ process.on("unhandledRejection", err => {
 
 
 const express = require("express");
+const http = require("http");
 const sql = require("mssql");
 const path = require("path");
 require("dotenv").config();
-const WebSocket = require('ws');
-const wss = new WebSocket.Server({ port: 8080 });
+const WebSocket = require("ws");
 const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server, path: "/ws" });
 const PORT = 1248;
 const crypto = require('crypto');
 const { logWith } = require("./logger");
@@ -51,8 +53,8 @@ const serverHash = crypto
 logWith("log", "config", "dbUser configured");
 
 wss.on("connection", async (ws, req) => {
-    const params = new URLSearchParams(req.url.replace("/?", ""));
-    const token = params.get("token");
+    const requestUrl = new URL(req.url || "/", "http://localhost");
+    const token = requestUrl.searchParams.get("token");
     logWith("log", "ws", "Connection attempt");
 
     try {
@@ -378,7 +380,7 @@ app.post("/api/finish-order", async (req, res) => {
 });
 
 
-app.listen(PORT, async () => {
+server.listen(PORT, async () => {
     logWith("log", "server", "Server running");
 
     try {

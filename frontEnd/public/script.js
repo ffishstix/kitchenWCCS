@@ -65,7 +65,8 @@ function connect(token, auto = false) {
     return new Promise((resolve, reject) => {
         const element = document.getElementById("connected");
         logWith("log", "ws", `Connecting (auto=${auto})`);
-        socket = new WebSocket(`ws://${window.location.host}:8080/?token=${token}`);
+        const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+        socket = new WebSocket(`${wsProtocol}://${window.location.host}/ws?token=${token}`);
         let settled = false;
 
         socket.onopen = () => {
