@@ -27,18 +27,30 @@ body {
 
 /* Grid container */
 .orders-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    grid-auto-rows: var(--order-card-height, 320px);
+    display: flex;
+    align-items: flex-start;
     gap: 20px;
+    height: var(--orders-grid-height, auto);
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 6px;
+}
+
+.orders-column {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    flex: 0 0 auto;
+    height: var(--orders-grid-height, auto);
 }
 
 /* Single order card */
 .order-card {
     background: #fff;
     border: 4px solid #000;
-    height: var(--order-card-height, 320px);
+    height: auto;
     max-height: var(--order-card-height, 320px);
+    width: 240px;
     display: flex;
     flex-direction: column;
 }
@@ -61,7 +73,8 @@ body {
 /* Body section */
 .order-body {
     padding: 12px;
-    flex: 1;
+    flex: 0 1 auto;
+    min-height: 0;
     overflow-y: hidden;
     line-height: 1.4;
 

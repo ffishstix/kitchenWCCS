@@ -25,7 +25,35 @@ function getOrderCardHeight(container) {
 function setOrderCardHeight(container) {
     const height = getOrderCardHeight(container);
     container.style.setProperty("--order-card-height", `${height}px`);
+    container.style.setProperty("--orders-grid-height", `${height}px`);
     return height;
+}
+
+function setOrderBodyMaxHeight(card, header, footer, body, maxCardHeight) {
+    if (!card || !header || !footer || !body || !maxCardHeight) return;
+    const cardStyles = getComputedStyle(card);
+    const borderTop = parseFloat(cardStyles.borderTopWidth || "0");
+    const borderBottom = parseFloat(cardStyles.borderBottomWidth || "0");
+    const available = maxCardHeight - header.offsetHeight - footer.offsetHeight - borderTop - borderBottom;
+    body.style.maxHeight = `${Math.max(0, Math.floor(available))}px`;
+}
+
+function createOrderColumn(container) {
+    const column = document.createElement("div");
+    column.className = "orders-column";
+    container.appendChild(column);
+    return column;
+}
+
+function finalizeColumnCard(column, card, maxHeight, containerRef) {
+    if (!column || !card) return { column };
+    if (column.childElementCount > 1 && column.scrollHeight > maxHeight) {
+        column.removeChild(card);
+        const nextColumn = createOrderColumn(containerRef);
+        nextColumn.appendChild(card);
+        return { column: nextColumn };
+    }
+    return { column };
 }
 
 function buildOrderHeader(order, isContinued) {
@@ -54,7 +82,7 @@ function buildOrderHeader(order, isContinued) {
     return header;
 }
 
-function buildOrderFooter(order) {
+function buildOrderFooter(order, isCompletedView) {
     const footer = document.createElement("div");
     footer.className = "order-footer";
 
@@ -78,9 +106,13 @@ function buildOrderFooter(order) {
 
     const button = document.createElement("button");
     button.className = "order-button";
-    button.textContent = "Complete Order";
+    button.textContent = isCompletedView ? "Uncomplete Order" : "Complete Order";
     button.dataset.orderId = String(order.orderId);
-    button.addEventListener("click", () => finishOrder(order.orderId, button));
+    if (isCompletedView) {
+        button.addEventListener("click", () => unfinishOrder(order.orderId, button));
+    } else {
+        button.addEventListener("click", () => finishOrder(order.orderId, button));
+    }
 
     footer.appendChild(orderTime);
     footer.appendChild(button);
@@ -88,20 +120,20 @@ function buildOrderFooter(order) {
     return footer;
 }
 
-function buildOrderCard(order, isContinued) {
+function buildOrderCard(order, isContinued, isCompletedView) {
     const card = document.createElement("div");
     card.className = "order-card";
 
     const header = buildOrderHeader(order, isContinued);
     const body = document.createElement("div");
     body.className = "order-body";
-    const footer = buildOrderFooter(order);
+    const footer = buildOrderFooter(order, isCompletedView);
 
     card.appendChild(header);
     card.appendChild(body);
     card.appendChild(footer);
 
-    return { card, body };
+    return { card, body, header, footer };
 }
 
 function buildItemElement(item) {
@@ -139,7 +171,7 @@ function createCards(cardsData) {
     }
 
     lastCardsData = deduped;
-    setOrderCardHeight(container);
+    const maxCardHeight = setOrderCardHeight(container);
     container.textContent = "";
     const orders = new Map();
 
@@ -172,9 +204,12 @@ function createCards(cardsData) {
         }
     }
 
+    const isCompletedView = window.currentOrderView === "completed";
+    let column = createOrderColumn(container);
     for (const order of orders.values()) {
-        let { card, body } = buildOrderCard(order, false);
-        container.appendChild(card);
+        let { card, body, header, footer } = buildOrderCard(order, false, isCompletedView);
+        column.appendChild(card);
+        setOrderBodyMaxHeight(card, header, footer, body, maxCardHeight);
         let cardIndex = 1;
 
         for (const item of order.items) {
@@ -183,10 +218,13 @@ function createCards(cardsData) {
 
             if (body.scrollHeight > body.clientHeight) {
                 body.removeChild(itemEl);
-                const nextCard = buildOrderCard(order, true);
-                container.appendChild(nextCard.card);
+                ({ column } = finalizeColumnCard(column, card, maxCardHeight, container));
+                const nextCard = buildOrderCard(order, true, isCompletedView);
+                column.appendChild(nextCard.card);
+                setOrderBodyMaxHeight(nextCard.card, nextCard.header, nextCard.footer, nextCard.body, maxCardHeight);
                 logWith("log", "cards", "Continued order", { orderId: order.orderId, cardIndex });
                 cardIndex += 1;
+                card = nextCard.card;
                 body = nextCard.body;
                 body.appendChild(itemEl);
 
@@ -196,6 +234,7 @@ function createCards(cardsData) {
                 }
             }
         }
+        ({ column } = finalizeColumnCard(column, card, maxCardHeight, container));
     }
 
     if (orders.size === 0) logWith("warn", "cards", "No orders to display");
@@ -245,6 +284,52 @@ async function finishOrder(orderId, button) {
         }
     } catch (err) {
         logWith("error", "order", "Finish order error", err);
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
+async function unfinishOrder(orderId, button) {
+    const id = Number(orderId);
+    if (!Number.isInteger(id)) {
+        logWith("warn", "order", "Invalid orderId", orderId);
+        return;
+    }
+
+    if (button) button.disabled = true;
+    try {
+        const res = await fetch("/api/unfinish-order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderId: id })
+        });
+
+        if (!res.ok) {
+            logWith("error", "order", "Failed to unfinish order", id);
+            return;
+        }
+
+        const data = await res.json();
+        if (!data.success) {
+            logWith("error", "order", "Unfinish order rejected", id);
+            return;
+        }
+
+        logWith("log", "order", "Unfinished", id);
+        const cache = Array.isArray(window.ordersCache) ? window.ordersCache : lastCardsData;
+        if (Array.isArray(cache)) {
+            const filtered = cache.filter(item => item?.orderId !== id);
+            if (typeof window.setOrdersCache === "function") {
+                window.setOrdersCache(filtered);
+            } else {
+                createCards(filtered);
+            }
+        } else if (button) {
+            const card = button.closest(".order-card");
+            if (card) card.remove();
+        }
+    } catch (err) {
+        logWith("error", "order", "Unfinish order error", err);
     } finally {
         if (button) button.disabled = false;
     }

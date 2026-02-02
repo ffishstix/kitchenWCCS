@@ -81,18 +81,22 @@ wss.on("connection", async (ws, req) => {
 
     logWith("log", "ws", "Authenticated client connected");
 
-    let lastOrderLineId = 0;
+    let currentView = "active";
+    let lastOrderLineIdActive = 0;
+    let lastOrderLineIdCompleted = 0;
 
-    const sendFullFood = async () => {
+    const sendFullActive = async () => {
         try {
             const items = await getFoodToBeMade();
-            lastOrderLineId = getMaxOrderLineId(items, lastOrderLineId);
+            lastOrderLineIdActive = getMaxOrderLineId(items, lastOrderLineIdActive);
             ws.send(JSON.stringify({
                 type: "orders-full",
                 success: true,
                 value: items
             }));
-        } catch {
+        } catch (err) {
+            logWith("error", "db", "Active full orders failed");
+            console.error(err);
             ws.send(JSON.stringify({
                 type: "orders-full",
                 success: false,
@@ -101,17 +105,19 @@ wss.on("connection", async (ws, req) => {
         }
     };
 
-    const sendDeltaFood = async () => {
+    const sendDeltaActive = async () => {
         try {
-            const items = await getFoodToBeMadeSince(lastOrderLineId);
+            const items = await getFoodToBeMadeSince(lastOrderLineIdActive);
             if (items.length === 0) return;
-            lastOrderLineId = getMaxOrderLineId(items, lastOrderLineId);
+            lastOrderLineIdActive = getMaxOrderLineId(items, lastOrderLineIdActive);
             ws.send(JSON.stringify({
                 type: "orders-delta",
                 success: true,
                 value: items
             }));
-        } catch {
+        } catch (err) {
+            logWith("error", "db", "Active delta orders failed");
+            console.error(err);
             ws.send(JSON.stringify({
                 type: "orders-delta",
                 success: false,
@@ -120,9 +126,68 @@ wss.on("connection", async (ws, req) => {
         }
     };
 
-    const handleSyncConfirm = async (clientItems) => {
+    const sendFullCompleted = async () => {
         try {
-            const serverItems = await getFoodToBeMade();
+            const items = await getCompletedFood();
+            lastOrderLineIdCompleted = getMaxOrderLineId(items, lastOrderLineIdCompleted);
+            ws.send(JSON.stringify({
+                type: "orders-full",
+                success: true,
+                value: items
+            }));
+        } catch (err) {
+            logWith("error", "db", "Completed full orders failed");
+            console.error(err);
+            ws.send(JSON.stringify({
+                type: "orders-full",
+                success: false,
+                error: "Database error"
+            }));
+        }
+    };
+
+    const sendDeltaCompleted = async () => {
+        try {
+            const items = await getCompletedFoodSince(lastOrderLineIdCompleted);
+            if (items.length === 0) return;
+            lastOrderLineIdCompleted = getMaxOrderLineId(items, lastOrderLineIdCompleted);
+            ws.send(JSON.stringify({
+                type: "orders-delta",
+                success: true,
+                value: items
+            }));
+        } catch (err) {
+            logWith("error", "db", "Completed delta orders failed");
+            console.error(err);
+            ws.send(JSON.stringify({
+                type: "orders-delta",
+                success: false,
+                error: "Database error"
+            }));
+        }
+    };
+
+    const sendFullForView = async (view) => {
+        if (view === "completed") {
+            await sendFullCompleted();
+        } else {
+            await sendFullActive();
+        }
+    };
+
+    const sendDeltaForView = async () => {
+        if (currentView === "completed") {
+            await sendDeltaCompleted();
+        } else {
+            await sendDeltaActive();
+        }
+    };
+
+    const handleSyncConfirm = async (view, clientItems) => {
+        try {
+            const serverItems = view === "completed"
+                ? await getCompletedFood()
+                : await getFoodToBeMade();
             const match = listsMatch(serverItems, clientItems);
             if (match) {
                 ws.send(JSON.stringify({
@@ -132,13 +197,19 @@ wss.on("connection", async (ws, req) => {
                 return;
             }
 
-            lastOrderLineId = getMaxOrderLineId(serverItems, lastOrderLineId);
+            if (view === "completed") {
+                lastOrderLineIdCompleted = getMaxOrderLineId(serverItems, lastOrderLineIdCompleted);
+            } else {
+                lastOrderLineIdActive = getMaxOrderLineId(serverItems, lastOrderLineIdActive);
+            }
             ws.send(JSON.stringify({
                 type: "sync-result",
                 success: false,
                 value: serverItems
             }));
-        } catch {
+        } catch (err) {
+            logWith("error", "db", "Sync confirm failed");
+            console.error(err);
             ws.send(JSON.stringify({
                 type: "sync-result",
                 success: false,
@@ -147,8 +218,8 @@ wss.on("connection", async (ws, req) => {
         }
     };
 
-    await sendFullFood();
-    const interval = setInterval(sendDeltaFood, 5000);
+    await sendFullActive();
+    const interval = setInterval(sendDeltaForView, 5000);
 
     ws.on("close", () => clearInterval(interval));
     ws.on("message", async (data) => {
@@ -160,7 +231,14 @@ wss.on("connection", async (ws, req) => {
         }
 
         if (message?.type === "sync-confirm") {
-            await handleSyncConfirm(Array.isArray(message.value) ? message.value : []);
+            const view = message?.view === "completed" ? "completed" : "active";
+            await handleSyncConfirm(view, Array.isArray(message.value) ? message.value : []);
+            return;
+        }
+
+        if (message?.type === "set-order-view") {
+            currentView = message?.value === "completed" ? "completed" : "active";
+            await sendFullForView(currentView);
         }
     });
 });
@@ -169,14 +247,14 @@ async function getFoodToBeMade(){
     if (!pool) pool = await sql.connect(dbConfig);
 
     const query = 'select o.Id as orderId, oL.Id as orderLineId, ai.itemName as itemName, ol.message as message, s.name as staffName,\n' +
-        '       h.tableNumber as tableNumber, h.sentDateTime as sentDateTime\n' +
+        '       h.tableNumber as tableNumber, h.sentDateTime as sentDateTime, h.finished as finished\n' +
         'from allItems as ai, orderLine as oL, orders as o, headers as h, staff as s\n' +
         'where o.headerId = h.Id\n' +
         '    and oL.orderId = o.Id\n' +
+        '    and ai.itemId = oL.itemId\n' +
         '    and h.finished = 0\n' +
         '    and ai.madeInKitchen = 1\n' +
         '    and s.Id = h.staffId\n' +
-        '\n' +
         'order by oL.Id asc';
 
     const result = await pool.request().query(query);
@@ -188,7 +266,8 @@ async function getFoodToBeMade(){
         message: row.message,
         staffName: row.staffName,
         tableNumber: row.tableNumber,
-        sentDateTime: row.sentDateTime
+        sentDateTime: row.sentDateTime,
+        finished: row.finished
     }));
 
 }
@@ -197,10 +276,11 @@ async function getFoodToBeMadeSince(lastOrderLineId){
     if (!pool) pool = await sql.connect(dbConfig);
 
     const query = 'select o.Id as orderId, oL.Id as orderLineId, ai.itemName as itemName, ol.message as message, s.name as staffName,\n' +
-        '       h.tableNumber as tableNumber, h.sentDateTime as sentDateTime\n' +
+        '       h.tableNumber as tableNumber, h.sentDateTime as sentDateTime, h.finished as finished\n' +
         'from allItems as ai, orderLine as oL, orders as o, headers as h, staff as s\n' +
         'where o.headerId = h.Id\n' +
         '    and oL.orderId = o.Id\n' +
+        '    and ai.itemId = oL.itemId\n' +
         '    and h.finished = 0\n' +
         '    and ai.madeInKitchen = 1\n' +
         '    and s.Id = h.staffId\n' +
@@ -219,7 +299,69 @@ async function getFoodToBeMadeSince(lastOrderLineId){
         message: row.message,
         staffName: row.staffName,
         tableNumber: row.tableNumber,
-        sentDateTime: row.sentDateTime
+        sentDateTime: row.sentDateTime,
+        finished: row.finished
+    }));
+}
+
+async function getCompletedFood(){
+    if (!pool) pool = await sql.connect(dbConfig);
+
+    const query = 'select o.Id as orderId, oL.Id as orderLineId, ai.itemName as itemName, ol.message as message, s.name as staffName,\n' +
+        '       h.tableNumber as tableNumber, h.sentDateTime as sentDateTime, h.finished as finished\n' +
+        'from allItems as ai, orderLine as oL, orders as o, headers as h, staff as s\n' +
+        'where o.headerId = h.Id\n' +
+        '    and oL.orderId = o.Id\n' +
+        '    and ai.itemId = oL.itemId\n' +
+        '    and h.finished = 1\n' +
+        '    and ai.madeInKitchen = 1\n' +
+        '    and s.Id = h.staffId\n' +
+        '\n' +
+        'order by oL.Id asc';
+
+    const result = await pool.request().query(query);
+    logWith("log", "db", "setting completed order to api");
+    return result.recordset.map(row => ({
+        orderId: row.orderId,
+        orderLineId: row.orderLineId,
+        itemName: row.itemName,
+        message: row.message,
+        staffName: row.staffName,
+        tableNumber: row.tableNumber,
+        sentDateTime: row.sentDateTime,
+        finished: row.finished
+    }));
+}
+
+async function getCompletedFoodSince(lastOrderLineId){
+    if (!pool) pool = await sql.connect(dbConfig);
+
+    const query = 'select o.Id as orderId, oL.Id as orderLineId, ai.itemName as itemName, ol.message as message, s.name as staffName,\n' +
+        '       h.tableNumber as tableNumber, h.sentDateTime as sentDateTime, h.finished as finished\n' +
+        'from allItems as ai, orderLine as oL, orders as o, headers as h, staff as s\n' +
+        'where o.headerId = h.Id\n' +
+        '    and oL.orderId = o.Id\n' +
+        '    and ai.itemId = oL.itemId\n' +
+        '    and h.finished = 1\n' +
+        '    and ai.madeInKitchen = 1\n' +
+        '    and s.Id = h.staffId\n' +
+        '    and oL.Id > @lastOrderLineId\n' +
+        '\n' +
+        'order by oL.Id asc';
+
+    const result = await pool
+        .request()
+        .input("lastOrderLineId", sql.Int, Number(lastOrderLineId) || 0)
+        .query(query);
+    return result.recordset.map(row => ({
+        orderId: row.orderId,
+        orderLineId: row.orderLineId,
+        itemName: row.itemName,
+        message: row.message,
+        staffName: row.staffName,
+        tableNumber: row.tableNumber,
+        sentDateTime: row.sentDateTime,
+        finished: row.finished
     }));
 }
 
@@ -278,6 +420,17 @@ async function finishOrder(orderId){
         .request()
         .input("orderId", sql.Int, id)
         .query("update headers set finished = 1 where Id = @orderId");
+    
+}
+
+async function unfinishOrder(orderId){
+    const id = Number(orderId);
+    if (!Number.isInteger(id)) return;
+    if (!pool) pool = await sql.connect(dbConfig);
+    await pool
+        .request()
+        .input("orderId", sql.Int, id)
+        .query("update headers set finished = 0 where Id = @orderId");
     
 }
 
@@ -376,6 +529,23 @@ app.post("/api/finish-order", async (req, res) => {
     } catch (err) {
         logWith("error", "order", "Finish order error");
         res.status(500).json({ success: false, error: "Failed to finish order" });
+    }
+});
+
+app.post("/api/unfinish-order", async (req, res) => {
+    const { orderId } = req.body;
+
+    if (orderId == null) {
+        res.status(400).json({ success: false, error: "Missing orderId" });
+        return;
+    }
+
+    try {
+        await unfinishOrder(orderId);
+        res.json({ success: true });
+    } catch (err) {
+        logWith("error", "order", "Unfinish order error");
+        res.status(500).json({ success: false, error: "Failed to unfinish order" });
     }
 });
 

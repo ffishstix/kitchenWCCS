@@ -2,6 +2,10 @@ let socket;
 const TOKEN_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 let ordersCache = [];
 window.ordersCache = ordersCache;
+const ORDER_VIEW_ACTIVE = "active";
+const ORDER_VIEW_COMPLETED = "completed";
+let currentOrderView = ORDER_VIEW_ACTIVE;
+window.currentOrderView = currentOrderView;
 
 window.logWith = (level, context, message, data) => {
     const line = `[${context}] ${message}`;
@@ -15,6 +19,27 @@ const logWith = window.logWith;
 
 function setCredentialsVisible(visible) {
     document.getElementById("credentials").style.display = visible ? "block" : "none";
+}
+
+function setViewButtonVisible(visible) {
+    const button = document.getElementById("toggle-completed");
+    if (button) button.style.display = visible ? "inline-block" : "none";
+}
+
+function setOrderView(nextView, notify = true) {
+    if (nextView !== ORDER_VIEW_ACTIVE && nextView !== ORDER_VIEW_COMPLETED) return;
+    currentOrderView = nextView;
+    window.currentOrderView = currentOrderView;
+    const button = document.getElementById("toggle-completed");
+    if (button) {
+        button.textContent = currentOrderView === ORDER_VIEW_COMPLETED ? "Show Active" : "Show Completed";
+    }
+    if (notify && socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+            type: "set-order-view",
+            value: currentOrderView
+        }));
+    }
 }
 
 document.getElementById("login").addEventListener("click", async () => {
@@ -72,6 +97,8 @@ function connect(token, auto = false) {
         socket.onopen = () => {
             logWith("log", "ws", "Open");
             setCredentialsVisible(false);
+            setViewButtonVisible(true);
+            setOrderView(ORDER_VIEW_ACTIVE, false);
             if (!settled) {
                 settled = true;
                 resolve();
@@ -92,7 +119,7 @@ function connect(token, auto = false) {
                     logWith("error", "ws", "Full orders error", data.error);
                     return;
                 }
-                ordersCache = normalizeOrders(data.value);
+                ordersCache = filterOrdersForView(normalizeOrders(data.value));
                 window.ordersCache = ordersCache;
                 createCards(ordersCache);
                 sendSyncConfirm();
@@ -104,7 +131,7 @@ function connect(token, auto = false) {
                     logWith("error", "ws", "Delta orders error", data.error);
                     return;
                 }
-                const merged = mergeOrdersDelta(ordersCache, normalizeOrders(data.value));
+                const merged = mergeOrdersDelta(ordersCache, filterOrdersForView(normalizeOrders(data.value)));
                 if (merged !== ordersCache) {
                     ordersCache = merged;
                     window.ordersCache = ordersCache;
@@ -116,7 +143,7 @@ function connect(token, auto = false) {
             if (data.type === "sync-result") {
                 if (data.success) return;
                 if (Array.isArray(data.value)) {
-                    ordersCache = normalizeOrders(data.value);
+                    ordersCache = filterOrdersForView(normalizeOrders(data.value));
                     window.ordersCache = ordersCache;
                     createCards(ordersCache);
                 } else {
@@ -136,6 +163,8 @@ function connect(token, auto = false) {
                 reject();
             }
             setCredentialsVisible(true);
+            setViewButtonVisible(false);
+            setOrderView(ORDER_VIEW_ACTIVE, false);
         };
     });
 
@@ -149,6 +178,15 @@ window.setOrdersCache = (next) => {
 
 function normalizeOrders(value) {
     return Array.isArray(value) ? value : [];
+}
+
+function filterOrdersForView(items) {
+    if (!Array.isArray(items)) return [];
+    const target = currentOrderView === ORDER_VIEW_COMPLETED ? 1 : 0;
+    return items.filter(item => {
+        if (!item || item.finished == null) return true;
+        return Number(item.finished) === target;
+    });
 }
 
 function mergeOrdersDelta(current, delta) {
@@ -180,7 +218,8 @@ function sendSyncConfirm() {
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
     socket.send(JSON.stringify({
         type: "sync-confirm",
-        value: ordersCache
+        value: ordersCache,
+        view: currentOrderView
     }));
 }
 
@@ -211,3 +250,8 @@ async function attemptAutoLogin() {
 
 
 attemptAutoLogin();
+
+document.getElementById("toggle-completed").addEventListener("click", () => {
+    const nextView = currentOrderView === ORDER_VIEW_ACTIVE ? ORDER_VIEW_COMPLETED : ORDER_VIEW_ACTIVE;
+    setOrderView(nextView);
+});
