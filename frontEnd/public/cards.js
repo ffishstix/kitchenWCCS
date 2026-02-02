@@ -9,8 +9,6 @@ function formatOrderTime(sentDateTime) {
 
 let lastCardsData = null;
 let resizeTimer = null;
-const logWith = window.logWith;
-
 function getOrderCardHeight(container) {
     if (!container) return 320;
     const bodyStyles = getComputedStyle(document.body);
