@@ -65,7 +65,7 @@ function connect(token, auto = false) {
     return new Promise((resolve, reject) => {
         const element = document.getElementById("connected");
         logWith("log", "ws", `Connecting (auto=${auto})`);
-        socket = new WebSocket(`ws://localhost:8080/?token=${token}`);
+        socket = new WebSocket(`ws://fishstix.uk:8080/?token=${token}`);
         let settled = false;
 
         socket.onopen = () => {
