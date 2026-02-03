@@ -70,6 +70,28 @@ body {
 .order-footer {
     border-top: 4px solid #000;
 }
+.order-time time {
+    padding: 2px 8px;
+    border-radius: 999px;
+    display: inline-block;
+    min-width: 70px;
+}
+.timer-green {
+    background: #b9f6ca;
+    color: #0d4d1f;
+}
+.timer-yellow {
+    background: #fff59d;
+    color: #6b5b00;
+}
+.timer-orange {
+    background: #ffd180;
+    color: #7a3d00;
+}
+.timer-red {
+    background: #ff8a80;
+    color: #6b0f0f;
+}
 /* Body section */
 .order-body {
     padding: 12px;

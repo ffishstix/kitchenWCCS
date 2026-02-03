@@ -1,14 +1,59 @@
-function formatOrderTime(sentDateTime) {
-    if (!sentDateTime) return "--:--";
-    const date = new Date(sentDateTime);
-    if (Number.isNaN(date.getTime())) return "--:--";
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    return `${hours}:${minutes}`;
-}
-
 let lastCardsData = null;
 let resizeTimer = null;
+const TIMER_CLASSES = ["timer-green", "timer-yellow", "timer-orange", "timer-red"];
+const DISPLAY_TIMER_INTERVAL_MS = 1000;
+const displayStartTimes = new Map();
+let timerInterval = null;
+
+function formatElapsedTime(ms) {
+    const safeMs = Number.isFinite(ms) && ms > 0 ? ms : 0;
+    const totalSeconds = Math.floor(safeMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function getTimerClass(ms) {
+    const minutes = ms / 60000;
+    if (minutes < 15) return "timer-green";
+    if (minutes < 20) return "timer-yellow";
+    if (minutes < 25) return "timer-orange";
+    return "timer-red";
+}
+
+function getDisplayStart(orderId) {
+    const key = String(orderId);
+    if (!displayStartTimes.has(key)) {
+        displayStartTimes.set(key, Date.now());
+    }
+    return displayStartTimes.get(key);
+}
+
+function pruneDisplayStartTimes(activeOrderIds) {
+    for (const key of displayStartTimes.keys()) {
+        if (!activeOrderIds.has(key)) displayStartTimes.delete(key);
+    }
+}
+
+function updateDisplayedTimers() {
+    const timeEls = document.querySelectorAll(".order-time time[data-order-id]");
+    if (!timeEls.length) return;
+    const now = Date.now();
+    for (const timeEl of timeEls) {
+        const orderId = timeEl.dataset.orderId;
+        if (!orderId) continue;
+        let start = displayStartTimes.get(orderId);
+        if (start == null) {
+            start = now;
+            displayStartTimes.set(orderId, start);
+        }
+        const elapsed = now - start;
+        const nextClass = getTimerClass(elapsed);
+        timeEl.textContent = formatElapsedTime(elapsed);
+        timeEl.classList.remove(...TIMER_CLASSES);
+        timeEl.classList.add(nextClass);
+    }
+}
 function getOrderCardHeight(container) {
     if (!container) return 320;
     const bodyStyles = getComputedStyle(document.body);
@@ -90,16 +135,13 @@ function buildOrderFooter(order, isCompletedView) {
     orderTime.className = "order-time";
 
     const label = document.createElement("span");
-    label.textContent = "Time of order: ";
+    label.textContent = "Time displayed: ";
 
     const timeEl = document.createElement("time");
-    timeEl.textContent = formatOrderTime(order.sentDateTime);
-    if (order.sentDateTime) {
-        const date = new Date(order.sentDateTime);
-        if (!Number.isNaN(date.getTime())) {
-            timeEl.dateTime = date.toISOString();
-        }
-    }
+    timeEl.dataset.orderId = String(order.orderId);
+    const elapsed = Date.now() - (order.displayedAt ?? Date.now());
+    timeEl.textContent = formatElapsedTime(elapsed);
+    timeEl.classList.add(getTimerClass(elapsed));
 
     orderTime.appendChild(label);
     orderTime.appendChild(timeEl);
@@ -174,9 +216,12 @@ function createCards(cardsData) {
     const maxCardHeight = setOrderCardHeight(container);
     container.textContent = "";
     const orders = new Map();
+    const activeOrderIds = new Set();
 
     for (const row of deduped) {
         if (!row || row.orderId == null) continue;
+        const orderIdKey = String(row.orderId);
+        activeOrderIds.add(orderIdKey);
 
         let order = orders.get(row.orderId);
         if (!order) {
@@ -185,6 +230,7 @@ function createCards(cardsData) {
                 staffName: row.staffName,
                 tableNumber: row.tableNumber,
                 sentDateTime: row.sentDateTime,
+                displayedAt: getDisplayStart(orderIdKey),
                 items: [],
                 lastItem: null
             };
@@ -235,6 +281,15 @@ function createCards(cardsData) {
             }
         }
         ({ column } = finalizeColumnCard(column, card, maxCardHeight, container));
+    }
+
+    pruneDisplayStartTimes(activeOrderIds);
+    updateDisplayedTimers();
+    if (orders.size > 0 && !timerInterval) {
+        timerInterval = setInterval(updateDisplayedTimers, DISPLAY_TIMER_INTERVAL_MS);
+    } else if (orders.size === 0 && timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
     }
 
     if (orders.size === 0) logWith("warn", "cards", "No orders to display");
