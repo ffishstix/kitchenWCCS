@@ -24,8 +24,7 @@ function logWith(level, context, message) {
     lastKey = key;
     lastCount = 1;
     const line = `[${context}] ${message}`;
-    const stream = level === "error" || level === "warn" ? process.stderr : process.stdout;
-    lastStream = stream;
+    lastStream = level === "error" || level === "warn" ? process.stderr : process.stdout;
     console[level](line);
 }
 
