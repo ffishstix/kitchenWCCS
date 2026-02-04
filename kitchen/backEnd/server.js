@@ -18,7 +18,7 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server, path: "/ws" });
 const PORT = 1248;
 const crypto = require('crypto');
-const { logWith } = require("./logger");
+const { logWith } = require("../../global/logger");
 const {
     ensureAuthTokensTable,
     saveToken,
@@ -267,6 +267,7 @@ async function getFoodToBeMade(){
         staffName: row.staffName,
         tableNumber: row.tableNumber,
         sentDateTime: row.sentDateTime,
+        activeAt: normalizeDateTime(row.sentDateTime),
         finished: row.finished
     }));
 
@@ -300,6 +301,7 @@ async function getFoodToBeMadeSince(lastOrderLineId){
         staffName: row.staffName,
         tableNumber: row.tableNumber,
         sentDateTime: row.sentDateTime,
+        activeAt: normalizeDateTime(row.sentDateTime),
         finished: row.finished
     }));
 }
@@ -329,6 +331,7 @@ async function getCompletedFood(){
         staffName: row.staffName,
         tableNumber: row.tableNumber,
         sentDateTime: row.sentDateTime,
+        activeAt: normalizeDateTime(row.sentDateTime),
         finished: row.finished
     }));
 }
@@ -361,6 +364,7 @@ async function getCompletedFoodSince(lastOrderLineId){
         staffName: row.staffName,
         tableNumber: row.tableNumber,
         sentDateTime: row.sentDateTime,
+        activeAt: normalizeDateTime(row.sentDateTime),
         finished: row.finished
     }));
 }

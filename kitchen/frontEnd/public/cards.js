@@ -2,7 +2,6 @@ let lastCardsData = null;
 let resizeTimer = null;
 const TIMER_CLASSES = ["timer-green", "timer-yellow", "timer-orange", "timer-red"];
 const DISPLAY_TIMER_INTERVAL_MS = 1000;
-const displayStartTimes = new Map();
 let timerInterval = null;
 
 function formatElapsedTime(ms) {
@@ -21,33 +20,27 @@ function getTimerClass(ms) {
     return "timer-red";
 }
 
-function getDisplayStart(orderId) {
-    const key = String(orderId);
-    if (!displayStartTimes.has(key)) {
-        displayStartTimes.set(key, Date.now());
-    }
-    return displayStartTimes.get(key);
+function parseActiveAtMs(value) {
+    if (value == null) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    const ms = date.getTime();
+    return Number.isNaN(ms) ? null : ms;
 }
 
-function pruneDisplayStartTimes(activeOrderIds) {
-    for (const key of displayStartTimes.keys()) {
-        if (!activeOrderIds.has(key)) displayStartTimes.delete(key);
-    }
+function resolveActiveAtMs(value) {
+    const parsed = parseActiveAtMs(value);
+    return parsed != null ? parsed : Date.now();
 }
 
 function updateDisplayedTimers() {
+    if (window.currentOrderView === "completed") return;
     const timeEls = document.querySelectorAll(".order-time time[data-order-id]");
     if (!timeEls.length) return;
     const now = Date.now();
     for (const timeEl of timeEls) {
-        const orderId = timeEl.dataset.orderId;
-        if (!orderId) continue;
-        let start = displayStartTimes.get(orderId);
-        if (start == null) {
-            start = now;
-            displayStartTimes.set(orderId, start);
-        }
-        const elapsed = now - start;
+        const activeAtMs = Number(timeEl.dataset.activeAt);
+        const safeActiveAt = Number.isFinite(activeAtMs) ? activeAtMs : now;
+        const elapsed = Math.max(0, now - safeActiveAt);
         const nextClass = getTimerClass(elapsed);
         timeEl.textContent = formatElapsedTime(elapsed);
         timeEl.classList.remove(...TIMER_CLASSES);
@@ -131,20 +124,25 @@ function buildOrderFooter(order, isCompletedView) {
     const footer = document.createElement("div");
     footer.className = "order-footer";
 
-    const orderTime = document.createElement("div");
-    orderTime.className = "order-time";
+    if (!isCompletedView) {
+        const orderTime = document.createElement("div");
+        orderTime.className = "order-time";
 
-    const label = document.createElement("span");
-    label.textContent = "Time displayed: ";
+        const label = document.createElement("span");
+        label.textContent = "Time active: ";
 
-    const timeEl = document.createElement("time");
-    timeEl.dataset.orderId = String(order.orderId);
-    const elapsed = Date.now() - (order.displayedAt ?? Date.now());
-    timeEl.textContent = formatElapsedTime(elapsed);
-    timeEl.classList.add(getTimerClass(elapsed));
+        const timeEl = document.createElement("time");
+        timeEl.dataset.orderId = String(order.orderId);
+        const activeAtMs = resolveActiveAtMs(order.activeAtMs);
+        timeEl.dataset.activeAt = String(activeAtMs);
+        const elapsed = Math.max(0, Date.now() - activeAtMs);
+        timeEl.textContent = formatElapsedTime(elapsed);
+        timeEl.classList.add(getTimerClass(elapsed));
 
-    orderTime.appendChild(label);
-    orderTime.appendChild(timeEl);
+        orderTime.appendChild(label);
+        orderTime.appendChild(timeEl);
+        footer.appendChild(orderTime);
+    }
 
     const button = document.createElement("button");
     button.className = "order-button";
@@ -156,7 +154,6 @@ function buildOrderFooter(order, isCompletedView) {
         button.addEventListener("click", () => finishOrder(order.orderId, button));
     }
 
-    footer.appendChild(orderTime);
     footer.appendChild(button);
 
     return footer;
@@ -216,25 +213,26 @@ function createCards(cardsData) {
     const maxCardHeight = setOrderCardHeight(container);
     container.textContent = "";
     const orders = new Map();
-    const activeOrderIds = new Set();
 
     for (const row of deduped) {
         if (!row || row.orderId == null) continue;
-        const orderIdKey = String(row.orderId);
-        activeOrderIds.add(orderIdKey);
 
         let order = orders.get(row.orderId);
         if (!order) {
+            const activeAtMs = resolveActiveAtMs(row.activeAt ?? row.sentDateTime);
             order = {
                 orderId: row.orderId,
                 staffName: row.staffName,
                 tableNumber: row.tableNumber,
                 sentDateTime: row.sentDateTime,
-                displayedAt: getDisplayStart(orderIdKey),
+                activeAtMs,
                 items: [],
                 lastItem: null
             };
             orders.set(row.orderId, order);
+        } else if (order.activeAtMs == null) {
+            const activeAtMs = parseActiveAtMs(row.activeAt ?? row.sentDateTime);
+            if (activeAtMs != null) order.activeAtMs = activeAtMs;
         }
 
         const name = row.itemName != null && String(row.itemName).trim() !== "" ? String(row.itemName) : null;
@@ -283,11 +281,13 @@ function createCards(cardsData) {
         ({ column } = finalizeColumnCard(column, card, maxCardHeight, container));
     }
 
-    pruneDisplayStartTimes(activeOrderIds);
-    updateDisplayedTimers();
-    if (orders.size > 0 && !timerInterval) {
+    const shouldRunTimers = !isCompletedView && orders.size > 0;
+    if (shouldRunTimers) {
+        updateDisplayedTimers();
+    }
+    if (shouldRunTimers && !timerInterval) {
         timerInterval = setInterval(updateDisplayedTimers, DISPLAY_TIMER_INTERVAL_MS);
-    } else if (orders.size === 0 && timerInterval) {
+    } else if (!shouldRunTimers && timerInterval) {
         clearInterval(timerInterval);
         timerInterval = null;
     }

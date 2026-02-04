@@ -1,5 +1,5 @@
 const sql = require("mssql");
-const { logWith } = require("./logger");
+const { logWith } = require("../../global/logger");
 
 async function ensureAuthTokensTable(pool) {
     await pool.request().query(`

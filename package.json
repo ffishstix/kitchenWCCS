@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "dev": "nodemon backEnd/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "kitchen": "nodemon kitchen/backEnd/server.js",
+    "landing": "nodemon landingPage/backEnd/server.js",
+    "admin"  : "nodemon admin/backEnd/server.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "FW",
   "license": "ISC",
   "dependencies": {
     "dotenv": "^17.2.3",
