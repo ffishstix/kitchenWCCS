@@ -484,10 +484,10 @@ function startTokenCleanupLoop() {
 }
 
 app.get("/", (req, res) => {
+    logWith("log", "ws", `Host: ${req.headers.host}`);
+    logWith("log", "ws", `Origin: ${req.headers.origin}`);
     res.sendFile(indexPath);
 });
-
-
 
 
 app.post("/api/login", async (req, res) => {
@@ -552,7 +552,6 @@ app.post("/api/unfinish-order", async (req, res) => {
         res.status(500).json({ success: false, error: "Failed to unfinish order" });
     }
 });
-
 
 server.listen(PORT, async () => {
     logWith("log", "server", "Server running");
