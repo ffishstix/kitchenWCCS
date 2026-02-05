@@ -490,9 +490,11 @@ app.get("/", (req, res) => {
 });
 
 
-app.post("/api/login", async (req, res) => {
+app.post(["/api/login", "/login"], async (req, res) => {
     const { credentialHash } = req.body;
-
+    if (credentialHash == null) {
+        res.status(204).json({ success: false });
+    }
     logWith("log", "login", "Attempt");
 
     // Reproduce the same hash on the server
@@ -519,7 +521,7 @@ app.post("/api/login", async (req, res) => {
     }
 });
 
-app.post("/api/finish-order", async (req, res) => {
+app.post(["/api/finish-order", "/finish-order"], async (req, res) => {
     const { orderId } = req.body;
 
     if (orderId == null) {
@@ -536,7 +538,7 @@ app.post("/api/finish-order", async (req, res) => {
     }
 });
 
-app.post("/api/unfinish-order", async (req, res) => {
+app.post(["/api/unfinish-order", "/unfinish-order"], async (req, res) => {
     const { orderId } = req.body;
 
     if (orderId == null) {
