@@ -26,7 +26,7 @@ const {
     deleteToken,
     cleanupExpiredTokens
 } = require("./tokenStore");
-const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const TOKEN_TTL_MS = 6 * 30 * 24 * 60 * 60 * 1000;
 const TOKEN_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const indexPath = path.resolve(__dirname, "../frontEnd/index.html");
 const publicPath = path.resolve(__dirname, "../frontEnd/public");

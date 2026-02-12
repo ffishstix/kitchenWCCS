@@ -1,5 +1,5 @@
 let socket;
-const TOKEN_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+const TOKEN_MAX_AGE_SECONDS = 6 * 30 * 24 * 60 * 60;
 let ordersCache = [];
 window.ordersCache = ordersCache;
 const ORDER_VIEW_ACTIVE = "active";
