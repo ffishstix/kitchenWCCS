@@ -1,11 +1,15 @@
 let socket;
 const TOKEN_MAX_AGE_SECONDS = 6 * 30 * 24 * 60 * 60;
+const RECONNECT_DELAY_BASE_MS = 1000;
+const RECONNECT_DELAY_MAX_MS = 10000;
 let ordersCache = [];
 window.ordersCache = ordersCache;
 const ORDER_VIEW_ACTIVE = "active";
 const ORDER_VIEW_COMPLETED = "completed";
 let currentOrderView = ORDER_VIEW_ACTIVE;
 window.currentOrderView = currentOrderView;
+let reconnectTimer = null;
+let reconnectDelayMs = RECONNECT_DELAY_BASE_MS;
 
 window.logWith = (level, context, message, data) => {
     const line = `[${context}] ${message}`;
@@ -16,6 +20,35 @@ window.logWith = (level, context, message, data) => {
     }
 };
 const logWith = window.logWith;
+window.isSocketOpen = () => socket && socket.readyState === WebSocket.OPEN;
+
+function setConnectionStatus(status) {
+    const element = document.getElementById("connected");
+    if (element) element.textContent = status;
+}
+
+function resetReconnectBackoff() {
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
+    reconnectDelayMs = RECONNECT_DELAY_BASE_MS;
+}
+
+function scheduleReconnect() {
+    if (reconnectTimer) return;
+    const delay = reconnectDelayMs;
+    reconnectDelayMs = Math.min(reconnectDelayMs * 2, RECONNECT_DELAY_MAX_MS);
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        attemptAutoLogin();
+    }, delay);
+}
+
+function clearAuthCookie() {
+    document.cookie = "authToken=; path=/; max-age=0";
+    document.cookie = "actionKey=; path=/; max-age=0";
+}
 
 function setCredentialsVisible(visible) {
     document.getElementById("credentials").style.display = visible ? "block" : "none";
@@ -61,11 +94,16 @@ document.getElementById("login").addEventListener("click", async () => {
         return;
     }
 
-    const { token } = await res.json();
+    const {token, actionKey} = await res.json();
     logWith("log", "login", "Received token");
 
     // Save the token in a cookie for future sessions
     document.cookie = `authToken=${encodeURIComponent(token)}; path=/; max-age=${TOKEN_MAX_AGE_SECONDS}`;
+    if (actionKey) {
+        document.cookie = `actionKey=${encodeURIComponent(actionKey)}; path=/; max-age=${TOKEN_MAX_AGE_SECONDS}`;
+    } else {
+        document.cookie = "actionKey=; path=/; max-age=0";
+    }
     connect(token);
 });
 
@@ -88,7 +126,7 @@ async function hashCredentials(username, password) {
 
 function connect(token, auto = false) {
     return new Promise((resolve, reject) => {
-        const element = document.getElementById("connected");
+        setConnectionStatus("Connecting...");
         logWith("log", "ws", `Connecting (auto=${auto})`);
         const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
         socket = new WebSocket(`${wsProtocol}://${window.location.host}/ws?token=${token}`);
@@ -96,6 +134,7 @@ function connect(token, auto = false) {
 
         socket.onopen = () => {
             logWith("log", "ws", "Open");
+            resetReconnectBackoff();
             setCredentialsVisible(false);
             setViewButtonVisible(true);
             setOrderView(ORDER_VIEW_ACTIVE, false);
@@ -103,7 +142,7 @@ function connect(token, auto = false) {
                 settled = true;
                 resolve();
             }
-            element.textContent = "Connected";
+            setConnectionStatus("Connected");
         };
         socket.onmessage = (event) => {
             let data;
@@ -151,13 +190,31 @@ function connect(token, auto = false) {
                 }
 
             }
+
+            if (data.type === "refresh") {
+                setOrderView(currentOrderView, true);
+            }
         };
 
-        socket.onclose= () => {
+        socket.onclose = (event) => {
             logWith("warn", "ws", "Closed");
+            const code = event?.code ?? 0;
+            if (code === 4001) {
+                logWith("warn", "auth", "Token rejected or expired");
+                clearAuthCookie();
+                setConnectionStatus("Disconnected");
+                setCredentialsVisible(true);
+                setViewButtonVisible(false);
+                setOrderView(ORDER_VIEW_ACTIVE, false);
+                if (auto && !settled) {
+                    settled = true;
+                    reject();
+                }
+                return;
+            }
             logWith("log", "ws", "Reconnecting (auto=" + auto + ")");
-            attemptAutoLogin();
-            element.textContent = "Disconnected";
+            scheduleReconnect();
+            setConnectionStatus("Disconnected");
             if (auto && !settled) {
                 settled = true;
                 reject();
@@ -237,6 +294,7 @@ async function attemptAutoLogin() {
     const token = getCookie("authToken");
     logWith("log", "cookie", "authToken", token ? "found" : "missing");
     if (token == null) {
+        setConnectionStatus("Disconnected");
         setCredentialsVisible(true);
         return;
     }

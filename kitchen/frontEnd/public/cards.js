@@ -32,6 +32,28 @@ function resolveActiveAtMs(value) {
     return parsed != null ? parsed : Date.now();
 }
 
+function formatOrderTimestamp(ms) {
+    if (!Number.isFinite(ms)) return "";
+    const date = new Date(ms);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+}
+
+function canPerformOrderAction() {
+    if (typeof window.isSocketOpen !== "function") return false;
+    if (!window.isSocketOpen()) {
+        logWith("warn", "order", "Action blocked: not connected");
+        return false;
+    }
+    return true;
+}
+
+function getActionAuthPayload() {
+    const authToken = typeof getCookie === "function" ? getCookie("authToken") : null;
+    const actionKey = typeof getCookie === "function" ? getCookie("actionKey") : null;
+    return {authToken, actionKey};
+}
+
 function updateDisplayedTimers() {
     if (window.currentOrderView === "completed") return;
     const timeEls = document.querySelectorAll(".order-time time[data-order-id]");
@@ -142,6 +164,14 @@ function buildOrderFooter(order, isCompletedView) {
         orderTime.appendChild(label);
         orderTime.appendChild(timeEl);
         footer.appendChild(orderTime);
+
+        if (order.showOriginalTime && Number.isFinite(order.originalSentAtMs)) {
+            const originalTime = document.createElement("div");
+            originalTime.className = "order-original-time";
+            const formatted = formatOrderTimestamp(order.originalSentAtMs);
+            originalTime.textContent = formatted ? `Order time: ${formatted}` : "Order time: -";
+            footer.appendChild(originalTime);
+        }
     }
 
     const button = document.createElement("button");
@@ -219,13 +249,23 @@ function createCards(cardsData) {
 
         let order = orders.get(row.orderId);
         if (!order) {
-            const activeAtMs = resolveActiveAtMs(row.activeAt ?? row.sentDateTime);
+            const originalSentAtMs = parseActiveAtMs(row.sentDateTime);
+            const unfinishAtMs = parseActiveAtMs(row.unfinishAt);
+            const baseActiveAtMs = parseActiveAtMs(row.activeAt ?? row.unfinishAt ?? row.sentDateTime);
+            const activeAtMs = resolveActiveAtMs(baseActiveAtMs ?? originalSentAtMs);
             order = {
                 orderId: row.orderId,
                 staffName: row.staffName,
                 tableNumber: row.tableNumber,
                 sentDateTime: row.sentDateTime,
+                originalSentAtMs,
+                unfinishAtMs,
                 activeAtMs,
+                showOriginalTime: Boolean(
+                    Number.isFinite(unfinishAtMs) &&
+                    Number.isFinite(originalSentAtMs) &&
+                    unfinishAtMs !== originalSentAtMs
+                ),
                 items: [],
                 lastItem: null
             };
@@ -304,17 +344,23 @@ async function finishOrder(orderId, button) {
         logWith("warn", "order", "Invalid orderId", orderId);
         return;
     }
+    if (!canPerformOrderAction()) return;
+    const {authToken, actionKey} = getActionAuthPayload();
+    if (!authToken || !actionKey) {
+        logWith("warn", "order", "Missing action auth");
+        return;
+    }
 
     if (button) button.disabled = true;
     try {
         const res = await fetch("/api/finish-order", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ orderId: id })
+            body: JSON.stringify({orderId: id, authToken, actionKey})
         });
 
         if (!res.ok) {
-            logWith("error", "order", "Failed to finish order", id);
+            logWith("error", "order", "Failed to finish order", {orderId: id, status: res.status});
             return;
         }
 
@@ -350,17 +396,23 @@ async function unfinishOrder(orderId, button) {
         logWith("warn", "order", "Invalid orderId", orderId);
         return;
     }
+    if (!canPerformOrderAction()) return;
+    const {authToken, actionKey} = getActionAuthPayload();
+    if (!authToken || !actionKey) {
+        logWith("warn", "order", "Missing action auth");
+        return;
+    }
 
     if (button) button.disabled = true;
     try {
         const res = await fetch("/api/unfinish-order", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ orderId: id })
+            body: JSON.stringify({orderId: id, authToken, actionKey})
         });
 
         if (!res.ok) {
-            logWith("error", "order", "Failed to unfinish order", id);
+            logWith("error", "order", "Failed to unfinish order", {orderId: id, status: res.status});
             return;
         }
 

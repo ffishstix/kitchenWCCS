@@ -30,6 +30,9 @@ const TOKEN_TTL_MS = 6 * 30 * 24 * 60 * 60 * 1000;
 const TOKEN_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const indexPath = path.resolve(__dirname, "../frontEnd/index.html");
 const publicPath = path.resolve(__dirname, "../frontEnd/public");
+const unfinishOverrides = new Map();
+const actionKeysByToken = new Map();
+const connectedTokens = new Map();
 const dbConfig = {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
@@ -52,6 +55,73 @@ const serverHash = crypto
     .digest("hex");
 logWith("log", "config", "dbUser configured");
 
+function broadcastRefresh() {
+    const payload = JSON.stringify({type: "refresh"});
+    for (const client of wss.clients) {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(payload);
+        }
+    }
+}
+
+function recordConnectedToken(token) {
+    if (!token) return;
+    const next = (connectedTokens.get(token) || 0) + 1;
+    connectedTokens.set(token, next);
+}
+
+function recordDisconnectedToken(token) {
+    if (!token) return;
+    const next = (connectedTokens.get(token) || 0) - 1;
+    if (next > 0) connectedTokens.set(token, next);
+    else connectedTokens.delete(token);
+}
+
+function getActionAuth(req) {
+    const authToken = req.body?.authToken
+        || req.headers["x-auth-token"]
+        || readCookie(req, "authToken");
+    const actionKey = req.body?.actionKey
+        || req.headers["x-action-key"]
+        || readCookie(req, "actionKey");
+    return {authToken, actionKey};
+}
+
+function readCookie(req, name) {
+    const cookieHeader = req.headers?.cookie;
+    if (!cookieHeader) return null;
+    const parts = cookieHeader.split(";").map(part => part.trim());
+    for (const part of parts) {
+        if (!part) continue;
+        const eqIndex = part.indexOf("=");
+        if (eqIndex === -1) continue;
+        const key = part.slice(0, eqIndex);
+        if (key === name) return decodeURIComponent(part.slice(eqIndex + 1));
+    }
+    return null;
+}
+
+function validateActionAuth(authToken, actionKey) {
+    if (!authToken || !actionKey) {
+        return {ok: false, status: 401, error: "Missing auth"};
+    }
+    const entry = actionKeysByToken.get(authToken);
+    if (!entry) {
+        return {ok: false, status: 401, error: "Action key missing"};
+    }
+    if (Number.isFinite(entry.expiresAt) && Date.now() > entry.expiresAt) {
+        actionKeysByToken.delete(authToken);
+        return {ok: false, status: 401, error: "Action key expired"};
+    }
+    if (entry.actionKey !== actionKey) {
+        return {ok: false, status: 403, error: "Invalid action key"};
+    }
+    if (!connectedTokens.has(authToken)) {
+        return {ok: false, status: 409, error: "Not connected"};
+    }
+    return {ok: true};
+}
+
 wss.on("connection", async (ws, req) => {
     const requestUrl = new URL(req.url || "/", "http://localhost");
     const token = requestUrl.searchParams.get("token");
@@ -65,21 +135,24 @@ wss.on("connection", async (ws, req) => {
         if (!expiresAt || Number.isNaN(expiresAtMs) || Date.now() > expiresAtMs) {
             if (expiresAt) {
                 await deleteToken(dbPool, token);
+                actionKeysByToken.delete(token);
                 logWith("warn", "auth", "Token expired");
             } else {
                 logWith("warn", "auth", "Token missing or unknown");
             }
-            ws.close();
+            ws.close(4001, "Unauthorized");
             return;
         }
         logWith("log", "auth", "Token accepted");
     } catch (err) {
         logWith("error", "auth", "Token validation failed");
-        ws.close();
+        ws.close(1011, "Auth validation failed");
         return;
     }
 
     logWith("log", "ws", "Authenticated client connected");
+    ws.authToken = token;
+    recordConnectedToken(token);
 
     let currentView = "active";
     let lastOrderLineIdActive = 0;
@@ -221,7 +294,10 @@ wss.on("connection", async (ws, req) => {
     await sendFullActive();
     const interval = setInterval(sendDeltaForView, 5000);
 
-    ws.on("close", () => clearInterval(interval));
+    ws.on("close", () => {
+        recordDisconnectedToken(ws.authToken);
+        clearInterval(interval);
+    });
     ws.on("message", async (data) => {
         let message;
         try {
@@ -267,7 +343,8 @@ async function getFoodToBeMade(){
         staffName: row.staffName,
         tableNumber: row.tableNumber,
         sentDateTime: row.sentDateTime,
-        activeAt: normalizeDateTime(row.sentDateTime),
+        activeAt: resolveOrderActiveAt(row.orderId, row.sentDateTime),
+        unfinishAt: resolveOrderUnfinishAt(row.orderId),
         finished: row.finished
     }));
 
@@ -301,7 +378,8 @@ async function getFoodToBeMadeSince(lastOrderLineId){
         staffName: row.staffName,
         tableNumber: row.tableNumber,
         sentDateTime: row.sentDateTime,
-        activeAt: normalizeDateTime(row.sentDateTime),
+        activeAt: resolveOrderActiveAt(row.orderId, row.sentDateTime),
+        unfinishAt: resolveOrderUnfinishAt(row.orderId),
         finished: row.finished
     }));
 }
@@ -331,7 +409,8 @@ async function getCompletedFood(){
         staffName: row.staffName,
         tableNumber: row.tableNumber,
         sentDateTime: row.sentDateTime,
-        activeAt: normalizeDateTime(row.sentDateTime),
+        activeAt: resolveOrderActiveAt(row.orderId, row.sentDateTime),
+        unfinishAt: resolveOrderUnfinishAt(row.orderId),
         finished: row.finished
     }));
 }
@@ -364,7 +443,8 @@ async function getCompletedFoodSince(lastOrderLineId){
         staffName: row.staffName,
         tableNumber: row.tableNumber,
         sentDateTime: row.sentDateTime,
-        activeAt: normalizeDateTime(row.sentDateTime),
+        activeAt: resolveOrderActiveAt(row.orderId, row.sentDateTime),
+        unfinishAt: resolveOrderUnfinishAt(row.orderId),
         finished: row.finished
     }));
 }
@@ -416,6 +496,18 @@ function normalizeDateTime(value) {
     return String(value);
 }
 
+function resolveOrderActiveAt(orderId, sentDateTime) {
+    const override = unfinishOverrides.get(Number(orderId));
+    if (Number.isFinite(override)) return normalizeDateTime(override);
+    return normalizeDateTime(sentDateTime);
+}
+
+function resolveOrderUnfinishAt(orderId) {
+    const override = unfinishOverrides.get(Number(orderId));
+    if (Number.isFinite(override)) return normalizeDateTime(override);
+    return "";
+}
+
 async function finishOrder(orderId){
     const id = Number(orderId);
     if (!Number.isInteger(id)) return;
@@ -424,6 +516,7 @@ async function finishOrder(orderId){
         .request()
         .input("orderId", sql.Int, id)
         .query("update headers set finished = 1 where Id = @orderId");
+    unfinishOverrides.delete(id);
     
 }
 
@@ -435,6 +528,7 @@ async function unfinishOrder(orderId){
         .request()
         .input("orderId", sql.Int, id)
         .query("update headers set finished = 0 where Id = @orderId");
+    unfinishOverrides.set(id, Date.now());
     
 }
 
@@ -484,8 +578,6 @@ function startTokenCleanupLoop() {
 }
 
 app.get("/", (req, res) => {
-    logWith("log", "ws", `Host: ${req.headers.host}`);
-    logWith("log", "ws", `Origin: ${req.headers.origin}`);
     res.sendFile(indexPath);
 });
 
@@ -494,6 +586,7 @@ app.post(["/api/login", "/login"], async (req, res) => {
     const { credentialHash } = req.body;
     if (credentialHash == null) {
         res.status(204).json({ success: false });
+        return;
     }
     logWith("log", "login", "Attempt");
 
@@ -502,14 +595,16 @@ app.post(["/api/login", "/login"], async (req, res) => {
 
     if (credentialHash === serverHash) {
         const token = crypto.randomUUID();
+        const actionKey = crypto.randomUUID();
         const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
 
         try {
             await ensureAuthReady();
             const dbPool = await getPool();
             await saveToken(dbPool, token, expiresAt);
+            actionKeysByToken.set(token, {actionKey, expiresAt: expiresAt.getTime()});
             logWith("log", "login", "Success");
-            res.json({ token });
+            res.json({token, actionKey});
         } catch (err) {
             logWith("error", "login", "Token save failed");
             res.status(500).json({ success: false, error: "Token store error" });
@@ -523,6 +618,12 @@ app.post(["/api/login", "/login"], async (req, res) => {
 
 app.post(["/api/finish-order", "/finish-order"], async (req, res) => {
     const { orderId } = req.body;
+    const {authToken, actionKey} = getActionAuth(req);
+    const authCheck = validateActionAuth(authToken, actionKey);
+    if (!authCheck.ok) {
+        res.status(authCheck.status).json({success: false, error: authCheck.error});
+        return;
+    }
 
     if (orderId == null) {
         res.status(400).json({ success: false, error: "Missing orderId" });
@@ -531,6 +632,7 @@ app.post(["/api/finish-order", "/finish-order"], async (req, res) => {
 
     try {
         await finishOrder(orderId);
+        broadcastRefresh();
         res.json({ success: true });
     } catch (err) {
         logWith("error", "order", "Finish order error");
@@ -540,6 +642,12 @@ app.post(["/api/finish-order", "/finish-order"], async (req, res) => {
 
 app.post(["/api/unfinish-order", "/unfinish-order"], async (req, res) => {
     const { orderId } = req.body;
+    const {authToken, actionKey} = getActionAuth(req);
+    const authCheck = validateActionAuth(authToken, actionKey);
+    if (!authCheck.ok) {
+        res.status(authCheck.status).json({success: false, error: authCheck.error});
+        return;
+    }
 
     if (orderId == null) {
         res.status(400).json({ success: false, error: "Missing orderId" });
@@ -548,6 +656,7 @@ app.post(["/api/unfinish-order", "/unfinish-order"], async (req, res) => {
 
     try {
         await unfinishOrder(orderId);
+        broadcastRefresh();
         res.json({ success: true });
     } catch (err) {
         logWith("error", "order", "Unfinish order error");

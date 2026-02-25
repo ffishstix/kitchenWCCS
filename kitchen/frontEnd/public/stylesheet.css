@@ -76,6 +76,12 @@ body {
     display: inline-block;
     min-width: 70px;
 }
+
+.order-original-time {
+    margin-top: 6px;
+    font-size: 0.85em;
+    color: #333;
+}
 .timer-green {
     background: #b9f6ca;
     color: #0d4d1f;
