@@ -103,20 +103,25 @@ function readCookie(req, name) {
 
 function validateActionAuth(authToken, actionKey) {
     if (!authToken || !actionKey) {
+        logWith("warn", "action", "Missing auth", {hasToken: Boolean(authToken), hasActionKey: Boolean(actionKey)});
         return {ok: false, status: 401, error: "Missing auth"};
     }
     const entry = actionKeysByToken.get(authToken);
     if (!entry) {
+        logWith("warn", "action", "Action key missing for token");
         return {ok: false, status: 401, error: "Action key missing"};
     }
     if (Number.isFinite(entry.expiresAt) && Date.now() > entry.expiresAt) {
         actionKeysByToken.delete(authToken);
+        logWith("warn", "action", "Action key expired");
         return {ok: false, status: 401, error: "Action key expired"};
     }
     if (entry.actionKey !== actionKey) {
+        logWith("warn", "action", "Invalid action key");
         return {ok: false, status: 403, error: "Invalid action key"};
     }
     if (!connectedTokens.has(authToken)) {
+        logWith("warn", "action", "Not connected");
         return {ok: false, status: 409, error: "Not connected"};
     }
     return {ok: true};
@@ -619,6 +624,11 @@ app.post(["/api/login", "/login"], async (req, res) => {
 app.post(["/api/finish-order", "/finish-order"], async (req, res) => {
     const { orderId } = req.body;
     const {authToken, actionKey} = getActionAuth(req);
+    logWith("log", "action", "Finish request", {
+        orderId,
+        hasToken: Boolean(authToken),
+        hasActionKey: Boolean(actionKey)
+    });
     const authCheck = validateActionAuth(authToken, actionKey);
     if (!authCheck.ok) {
         res.status(authCheck.status).json({success: false, error: authCheck.error});
@@ -643,6 +653,11 @@ app.post(["/api/finish-order", "/finish-order"], async (req, res) => {
 app.post(["/api/unfinish-order", "/unfinish-order"], async (req, res) => {
     const { orderId } = req.body;
     const {authToken, actionKey} = getActionAuth(req);
+    logWith("log", "action", "Unfinish request", {
+        orderId,
+        hasToken: Boolean(authToken),
+        hasActionKey: Boolean(actionKey)
+    });
     const authCheck = validateActionAuth(authToken, actionKey);
     if (!authCheck.ok) {
         res.status(authCheck.status).json({success: false, error: authCheck.error});
