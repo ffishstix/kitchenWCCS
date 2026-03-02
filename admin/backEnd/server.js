@@ -55,6 +55,11 @@ const serverHash = crypto
 
 logWith("log", "config", "admin server config loaded");
 
+function logAudit(action, details) {
+    const payload = details ? ` ${JSON.stringify(details)}` : "";
+    logWith("log", "audit", `${action}${payload}`);
+}
+
 app.use(express.json());
 app.use("/public", express.static(publicPath));
 
@@ -334,7 +339,24 @@ app.get("/api/items/:id", requireAuth, async (req, res) => {
                 ORDER BY c.catName ASC;
             `);
 
-        res.json({success: true, item, categories: categoriesResult.recordset || []});
+        const allergiesResult = await dbPool
+            .request()
+            .input("itemId", sql.Int, itemId)
+            .query(`
+                SELECT a.allergyId,
+                       a.allergyName
+                FROM allergyItem ai
+                         JOIN allergies a ON a.allergyId = ai.allergyId
+                WHERE ai.itemId = @itemId
+                ORDER BY a.allergyName ASC;
+            `);
+
+        res.json({
+            success: true,
+            item,
+            categories: categoriesResult.recordset || [],
+            allergies: allergiesResult.recordset || []
+        });
     } catch (err) {
         logWith("error", "db", "Item detail query failed");
         res.status(500).json({success: false, error: "Database error"});
@@ -407,6 +429,7 @@ app.patch("/api/items/:id", requireAuth, async (req, res) => {
         await request.query(`UPDATE allItems
                              SET ${updates.join(", ")}
                              WHERE itemId = @itemId`);
+        logAudit("item.update", {itemId, fields: updates.map(field => field.split(" ")[0])});
         res.json({success: true});
     } catch (err) {
         logWith("error", "db", "Item update failed");
@@ -430,6 +453,7 @@ app.post("/api/items/:id/category", requireAuth, async (req, res) => {
                 .request()
                 .input("itemId", sql.Int, itemId)
                 .query("DELETE FROM foodCategory WHERE itemId = @itemId");
+            logAudit("item.categories.clear", {itemId});
             res.json({success: true, cleared: true});
             return;
         }
@@ -461,6 +485,7 @@ app.post("/api/items/:id/category", requireAuth, async (req, res) => {
         }
 
         res.json({success: true});
+        logAudit("item.categories.move", {itemId, categoryId});
     } catch (err) {
         logWith("error", "db", "Set category failed");
         res.status(500).json({success: false, error: "Database error"});
@@ -509,9 +534,116 @@ app.post("/api/items/:id/category/add", requireAuth, async (req, res) => {
             .input("categoryId", sql.Int, categoryId)
             .query("INSERT INTO foodCategory (itemId, categoryId) VALUES (@itemId, @categoryId)");
 
+        logAudit("item.categories.add", {itemId, categoryId});
         res.json({success: true});
     } catch (err) {
         logWith("error", "db", "Add category failed");
+        res.status(500).json({success: false, error: "Database error"});
+    }
+});
+
+app.post("/api/items/:id/category/remove", requireAuth, async (req, res) => {
+    const itemId = toNullableInt(req.params.id);
+    if (itemId == null) {
+        res.status(400).json({success: false, error: "Invalid item id"});
+        return;
+    }
+
+    const categoryId = toNullableInt(req.body.categoryId);
+    if (categoryId == null) {
+        res.status(400).json({success: false, error: "Invalid category id"});
+        return;
+    }
+
+    try {
+        const dbPool = await getPool();
+        await dbPool
+            .request()
+            .input("itemId", sql.Int, itemId)
+            .input("categoryId", sql.Int, categoryId)
+            .query("DELETE FROM foodCategory WHERE itemId = @itemId AND categoryId = @categoryId");
+        logAudit("item.categories.remove", {itemId, categoryId});
+        res.json({success: true});
+    } catch (err) {
+        logWith("error", "db", "Remove category failed");
+        res.status(500).json({success: false, error: "Database error"});
+    }
+});
+
+app.post("/api/items/:id/allergy/add", requireAuth, async (req, res) => {
+    const itemId = toNullableInt(req.params.id);
+    if (itemId == null) {
+        res.status(400).json({success: false, error: "Invalid item id"});
+        return;
+    }
+
+    const allergyId = toNullableInt(req.body.allergyId);
+    if (allergyId == null) {
+        res.status(400).json({success: false, error: "Invalid allergy id"});
+        return;
+    }
+
+    try {
+        const dbPool = await getPool();
+        const allergyCheck = await dbPool
+            .request()
+            .input("allergyId", sql.Int, allergyId)
+            .query("SELECT allergyId FROM allergies WHERE allergyId = @allergyId");
+
+        if (!allergyCheck.recordset?.length) {
+            res.status(404).json({success: false, error: "Allergy not found"});
+            return;
+        }
+
+        const existing = await dbPool
+            .request()
+            .input("itemId", sql.Int, itemId)
+            .input("allergyId", sql.Int, allergyId)
+            .query("SELECT 1 FROM allergyItem WHERE itemId = @itemId AND allergyId = @allergyId");
+
+        if (existing.recordset?.length) {
+            res.json({success: true, skipped: true});
+            return;
+        }
+
+        await dbPool
+            .request()
+            .input("itemId", sql.Int, itemId)
+            .input("allergyId", sql.Int, allergyId)
+            .query("INSERT INTO allergyItem (itemId, allergyId) VALUES (@itemId, @allergyId)");
+
+        logAudit("item.allergies.add", {itemId, allergyId});
+        res.json({success: true});
+    } catch (err) {
+        logWith("error", "db", "Add allergy failed");
+        res.status(500).json({success: false, error: "Database error"});
+    }
+});
+
+app.post("/api/items/:id/allergy/remove", requireAuth, async (req, res) => {
+    const itemId = toNullableInt(req.params.id);
+    if (itemId == null) {
+        res.status(400).json({success: false, error: "Invalid item id"});
+        return;
+    }
+
+    const allergyId = toNullableInt(req.body.allergyId);
+    if (allergyId == null) {
+        res.status(400).json({success: false, error: "Invalid allergy id"});
+        return;
+    }
+
+    try {
+        const dbPool = await getPool();
+        await dbPool
+            .request()
+            .input("itemId", sql.Int, itemId)
+            .input("allergyId", sql.Int, allergyId)
+            .query("DELETE FROM allergyItem WHERE itemId = @itemId AND allergyId = @allergyId");
+        logAudit("item.allergies.remove", {itemId, allergyId});
+        res.json({success: true});
+    } catch (err) {
+        logWith("error", "db", "Remove allergy failed");
         res.status(500).json({success: false, error: "Database error"});
     }
 });
@@ -579,6 +711,33 @@ app.get("/api/categories/:id", requireAuth, async (req, res) => {
     }
 });
 
+app.get("/api/categories/:id/items", requireAuth, async (req, res) => {
+    const categoryId = toNullableInt(req.params.id);
+    if (categoryId == null) {
+        res.status(400).json({success: false, error: "Invalid category id"});
+        return;
+    }
+
+    try {
+        const dbPool = await getPool();
+        const result = await dbPool
+            .request()
+            .input("categoryId", sql.Int, categoryId)
+            .query(`
+                SELECT ai.itemId,
+                       ai.itemName
+                FROM foodCategory fc
+                         JOIN allItems ai ON ai.itemId = fc.itemId
+                WHERE fc.categoryId = @categoryId
+                ORDER BY ai.itemName ASC;
+            `);
+        res.json({success: true, items: result.recordset || []});
+    } catch (err) {
+        logWith("error", "db", "Category items failed");
+        res.status(500).json({success: false, error: "Database error"});
+    }
+});
+
 app.patch("/api/categories/:id", requireAuth, async (req, res) => {
     const categoryId = toNullableInt(req.params.id);
     if (categoryId == null) {
@@ -616,9 +775,131 @@ app.patch("/api/categories/:id", requireAuth, async (req, res) => {
         await request.query(`UPDATE categories
                              SET ${updates.join(", ")}
                              WHERE categoryId = @categoryId`);
+        logAudit("category.update", {categoryId, fields: updates.map(field => field.split(" ")[0])});
         res.json({success: true});
     } catch (err) {
         logWith("error", "db", "Category update failed");
+        res.status(500).json({success: false, error: "Database error"});
+    }
+});
+
+app.get("/api/allergies", requireAuth, async (req, res) => {
+    const search = String(req.query.search || "").trim();
+    const searchId = toNullableInt(search);
+    const sort = String(req.query.sort || "name").toLowerCase() === "id" ? "id" : "name";
+    const limit = Math.min(Math.max(toNullableInt(req.query.limit) || 50, 1), 200);
+
+    try {
+        const dbPool = await getPool();
+        const result = await dbPool
+            .request()
+            .input("search", sql.VarChar(50), search)
+            .input("searchId", sql.Int, searchId)
+            .input("limit", sql.Int, limit)
+            .query(`
+                SELECT TOP (@limit) allergyId,
+                                    allergyName
+                FROM allergies
+                WHERE (
+                          @search = ''
+                              OR allergyName LIKE '%' + @search + '%'
+                              OR (@searchId IS NOT NULL AND allergyId = @searchId)
+                          )
+                ORDER BY ${sort === "id" ? "allergyId" : "allergyName"} ASC;
+            `);
+        res.json({success: true, allergies: result.recordset || []});
+    } catch (err) {
+        logWith("error", "db", "Allergies query failed");
+        res.status(500).json({success: false, error: "Database error"});
+    }
+});
+
+app.get("/api/allergies/:id", requireAuth, async (req, res) => {
+    const allergyId = toNullableInt(req.params.id);
+    if (allergyId == null) {
+        res.status(400).json({success: false, error: "Invalid allergy id"});
+        return;
+    }
+
+    try {
+        const dbPool = await getPool();
+        const result = await dbPool
+            .request()
+            .input("allergyId", sql.Int, allergyId)
+            .query(`
+                SELECT allergyId,
+                       allergyName
+                FROM allergies
+                WHERE allergyId = @allergyId;
+            `);
+        const allergy = result.recordset?.[0];
+        if (!allergy) {
+            res.status(404).json({success: false, error: "Allergy not found"});
+            return;
+        }
+        res.json({success: true, allergy});
+    } catch (err) {
+        logWith("error", "db", "Allergy detail failed");
+        res.status(500).json({success: false, error: "Database error"});
+    }
+});
+
+app.get("/api/allergies/:id/items", requireAuth, async (req, res) => {
+    const allergyId = toNullableInt(req.params.id);
+    if (allergyId == null) {
+        res.status(400).json({success: false, error: "Invalid allergy id"});
+        return;
+    }
+
+    try {
+        const dbPool = await getPool();
+        const result = await dbPool
+            .request()
+            .input("allergyId", sql.Int, allergyId)
+            .query(`
+                SELECT ai.itemId,
+                       ai.itemName
+                FROM allergyItem aI
+                         JOIN allItems ai ON ai.itemId = aI.itemId
+                WHERE aI.allergyId = @allergyId
+                ORDER BY ai.itemName ASC;
+            `);
+        res.json({success: true, items: result.recordset || []});
+    } catch (err) {
+        logWith("error", "db", "Allergy items failed");
+        res.status(500).json({success: false, error: "Database error"});
+    }
+});
+
+app.patch("/api/allergies/:id", requireAuth, async (req, res) => {
+    const allergyId = toNullableInt(req.params.id);
+    if (allergyId == null) {
+        res.status(400).json({success: false, error: "Invalid allergy id"});
+        return;
+    }
+
+    const updates = [];
+    const request = (await getPool()).request();
+    request.input("allergyId", sql.Int, allergyId);
+
+    if ("allergyName" in req.body) {
+        updates.push("allergyName = @allergyName");
+        request.input("allergyName", sql.VarChar(20), String(req.body.allergyName || "").trim());
+    }
+
+    if (updates.length === 0) {
+        res.status(400).json({success: false, error: "No valid fields to update"});
+        return;
+    }
+
+    try {
+        await request.query(`UPDATE allergies
+                             SET ${updates.join(", ")}
+                             WHERE allergyId = @allergyId`);
+        logAudit("allergy.update", {allergyId, fields: updates.map(field => field.split(" ")[0])});
+        res.json({success: true});
+    } catch (err) {
+        logWith("error", "db", "Allergy update failed");
         res.status(500).json({success: false, error: "Database error"});
     }
 });
@@ -758,6 +1039,7 @@ app.patch("/api/staff/:id/access", requireAuth, async (req, res) => {
             .input("accessLevel", sql.Int, accessLevel)
             .query("UPDATE staff SET accessLevel = @accessLevel WHERE id = @staffId");
 
+        logAudit("staff.access.update", {staffId, accessLevel});
         res.json({success: true});
     } catch (err) {
         logWith("error", "db", "Staff access update failed");

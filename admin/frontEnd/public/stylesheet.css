@@ -218,9 +218,58 @@ body {
     transition: border 0.2s ease, transform 0.2s ease;
 }
 
+.list.removable li {
+    cursor: default;
+}
+
+.list.removable .item-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.list.removable .remove-btn {
+    border: none;
+    background: rgba(32, 26, 20, 0.08);
+    color: var(--ink);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-weight: 700;
+    line-height: 1;
+}
+
 .list li:hover {
     border-color: var(--accent);
     transform: translateX(2px);
+}
+
+.list.removable li:hover {
+    border-color: transparent;
+    transform: none;
+}
+
+.item-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn.small {
+    padding: 6px 10px;
+    font-size: 12px;
+    border-radius: 8px;
+}
+
+.item-editor {
+    margin-top: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    background: var(--panel-strong);
 }
 
 .list li.active {
@@ -417,11 +466,24 @@ body {
     transform: translateY(10px);
     transition: opacity 0.25s ease, transform 0.25s ease;
     z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .toast.show {
     opacity: 1;
     transform: translateY(0);
+}
+
+.toast-action {
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    background: transparent;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    cursor: pointer;
 }
 
 @media print {

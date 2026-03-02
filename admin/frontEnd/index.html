@@ -92,6 +92,32 @@
             </div>
         </section>
 
+        <section class="panel" id="allergies-panel">
+            <div class="panel-header">
+                <h2>Allergy Manager</h2>
+                <div class="panel-hint">Search by name or ID, then edit.</div>
+            </div>
+            <div class="panel-body columns">
+                <div class="column">
+                    <label class="label" for="allergy-search">Find allergy</label>
+                    <div class="search">
+                        <input id="allergy-search" type="text" placeholder="Search by name or ID"/>
+                    </div>
+                    <div class="form-field">
+                        <label class="label">Sort by</label>
+                        <select id="allergy-sort">
+                            <option value="name">Name (A-Z)</option>
+                            <option value="id">ID</option>
+                        </select>
+                    </div>
+                    <ul class="list" id="allergy-results"></ul>
+                </div>
+                <div class="column detail" id="allergy-detail">
+                    <div class="detail-empty">Select an allergy to edit.</div>
+                </div>
+            </div>
+        </section>
+
         <section class="panel" id="reports-panel">
             <div class="panel-header">
                 <h2>Sales Report</h2>

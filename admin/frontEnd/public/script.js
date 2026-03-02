@@ -2,16 +2,25 @@ const TOKEN_MAX_AGE_SECONDS = 6 * 30 * 24 * 60 * 60;
 let searchTimer = null;
 let staffSearchTimer = null;
 let categorySearchTimer = null;
+let allergySearchTimer = null;
 let reportCategoryTimer = null;
 let reportItemTimer = null;
 let authAttempt = 0;
+let undoCounter = 0;
 
 const state = {
     token: null,
     items: [],
     selectedItemId: null,
+    currentItem: null,
+    currentItemCategories: [],
     categories: [],
     selectedCategoryId: null,
+    currentCategory: null,
+    categoryOpenEditors: new Map(),
+    allergies: [],
+    selectedAllergyId: null,
+    currentAllergy: null,
     staff: [],
     selectedStaffId: null,
     accessLevels: [],
@@ -36,6 +45,11 @@ const itemDetail = document.getElementById("item-detail");
 const categorySearchInput = document.getElementById("category-search");
 const categoryResults = document.getElementById("category-results");
 const categoryDetail = document.getElementById("category-detail");
+
+const allergySearchInput = document.getElementById("allergy-search");
+const allergySortSelect = document.getElementById("allergy-sort");
+const allergyResults = document.getElementById("allergy-results");
+const allergyDetail = document.getElementById("allergy-detail");
 
 const staffSearchInput = document.getElementById("staff-search");
 const staffResults = document.getElementById("staff-results");
@@ -219,6 +233,34 @@ function showToast(message, tone = "dark") {
     setTimeout(() => toast.classList.remove("show"), 2200);
 }
 
+function showUndo(message, onUndo) {
+    const undoToken = ++undoCounter;
+    toast.innerHTML = `
+        <span>${escapeHtml(message)}</span>
+        <button class="toast-action" type="button">Undo</button>
+    `;
+    toast.style.background = "#201a14";
+    toast.classList.add("show");
+
+    const button = toast.querySelector(".toast-action");
+    const timeout = setTimeout(() => {
+        if (authAttempt === undoToken) {
+            toast.classList.remove("show");
+        }
+    }, 5000);
+
+    button.addEventListener("click", async () => {
+        if (authAttempt !== undoToken) return;
+        clearTimeout(timeout);
+        toast.classList.remove("show");
+        try {
+            await onUndo();
+        } catch (err) {
+            showToast("Undo failed", "error");
+        }
+    }, {once: true});
+}
+
 function isValidColorName(value) {
     return COLOR_LOOKUP.has(String(value || "").toLowerCase());
 }
@@ -235,6 +277,42 @@ function formatPrice(penceValue) {
     if (!Number.isFinite(value)) return "-";
     const pounds = value / 100;
     return `£${pounds.toFixed(2)}`;
+}
+
+function buildCategoryChips(categories) {
+    if (!Array.isArray(categories) || categories.length === 0) {
+        return `<span class="muted">No category assigned.</span>`;
+    }
+    return categories.map(cat => `
+        <span class="chip">
+            ${escapeHtml(cat.catName)} (#${cat.categoryId})
+            <button type="button" data-category-id="${cat.categoryId}" aria-label="Remove">×</button>
+        </span>
+    `).join("");
+}
+
+function buildAllergyChips(allergies) {
+    if (!Array.isArray(allergies) || allergies.length === 0) {
+        return `<span class="muted">No allergies assigned.</span>`;
+    }
+    return allergies.map(allergy => `
+        <span class="chip">
+            ${escapeHtml(allergy.allergyName)} (#${allergy.allergyId})
+            <button type="button" data-allergy-id="${allergy.allergyId}" aria-label="Remove">×</button>
+        </span>
+    `).join("");
+}
+
+function getCategoryOpenSet(categoryId) {
+    if (!state.categoryOpenEditors) {
+        state.categoryOpenEditors = new Map();
+    }
+    let set = state.categoryOpenEditors.get(categoryId);
+    if (!set) {
+        set = new Set();
+        state.categoryOpenEditors.set(categoryId, set);
+    }
+    return set;
 }
 
 function buildColorPicker(id, currentValue) {
@@ -466,7 +544,8 @@ async function loadInitialData() {
         loadAccessLevels(),
         searchItems(),
         searchStaff(),
-        searchCategoriesManager()
+        searchCategoriesManager(),
+        searchAllergiesManager()
     ]);
     clearReportFilters();
 }
@@ -549,14 +628,28 @@ async function selectCategory(categoryId) {
     categoryDetail.innerHTML = `<div class="detail-empty">Loading category...</div>`;
 
     try {
-        const data = await api(`/api/categories/${categoryId}`);
-        renderCategoryDetail(data.category);
+        const [data, itemsData] = await Promise.all([
+            api(`/api/categories/${categoryId}`),
+            api(`/api/categories/${categoryId}/items`)
+        ]);
+        renderCategoryDetail(data.category, itemsData.items || []);
     } catch (err) {
         categoryDetail.innerHTML = `<div class="detail-empty">Failed to load category.</div>`;
     }
 }
 
-function renderCategoryDetail(category) {
+function renderCategoryDetail(category, items = []) {
+    state.currentCategory = category;
+    const openSet = getCategoryOpenSet(category.categoryId);
+    const currentIds = new Set(items.map(item => item.itemId));
+    for (const id of Array.from(openSet)) {
+        if (!currentIds.has(id)) openSet.delete(id);
+    }
+    if (openSet.size > 1) {
+        const first = openSet.values().next().value;
+        openSet.clear();
+        if (first != null) openSet.add(first);
+    }
     categoryDetail.innerHTML = `
         <div class="form-grid">
             <div class="form-field">
@@ -575,12 +668,98 @@ function renderCategoryDetail(category) {
         <div class="actions" style="margin-top: 14px;">
             <button class="btn primary" id="save-category">Save category changes</button>
         </div>
+        <div style="margin-top: 16px;">
+            <div class="label">Items in category</div>
+            <ul class="list removable" id="category-items" style="margin-top: 8px;">
+                ${items.length
+        ? items.map(item => `
+                        <li class="category-item" data-id="${item.itemId}">
+                            <div class="item-row">
+                                <span>${escapeHtml(item.itemName)} <span class="muted">#${item.itemId}</span></span>
+                                <div class="item-actions">
+                                    <button class="remove-btn" type="button" data-item-id="${item.itemId}" aria-label="Remove">×</button>
+                                </div>
+                            </div>
+                            <div class="item-editor" id="category-item-editor-${item.itemId}" style="display: none;"></div>
+                        </li>
+                    `).join("")
+        : `<li class="muted">No items in this category.</li>`
+    }
+            </ul>
+        </div>
     `;
 
     initColorPicker("category-colour");
     document.getElementById("save-category").addEventListener("click", () => {
         saveCategoryChanges(category.categoryId);
     });
+
+    const itemsList = document.getElementById("category-items");
+    if (itemsList) {
+        itemsList.addEventListener("click", async event => {
+            if (event.target.closest(".item-editor")) return;
+
+            const button = event.target.closest(".remove-btn");
+            if (button) {
+                const itemId = Number.parseInt(button.dataset.itemId, 10);
+                if (!Number.isInteger(itemId)) return;
+                openSet.delete(itemId);
+                try {
+                    await api(`/api/items/${itemId}/category/remove`, {
+                        method: "POST",
+                        body: JSON.stringify({categoryId: category.categoryId})
+                    });
+                    showUndo("Item removed", async () => {
+                        await api(`/api/items/${itemId}/category/add`, {
+                            method: "POST",
+                            body: JSON.stringify({categoryId: category.categoryId})
+                        });
+                        const restored = await api(`/api/categories/${category.categoryId}/items`);
+                        renderCategoryDetail(category, restored.items || []);
+                    });
+                    const refreshed = await api(`/api/categories/${category.categoryId}/items`);
+                    renderCategoryDetail(category, refreshed.items || []);
+                } catch (err) {
+                    showToast(err.message || "Remove failed", "error");
+                }
+                return;
+            }
+
+            const row = event.target.closest(".item-row");
+            if (!row) return;
+            const itemRow = row.closest("li");
+            if (!itemRow) return;
+            const itemId = Number.parseInt(itemRow.dataset.id, 10);
+            if (!Number.isInteger(itemId)) return;
+            const editor = itemRow.querySelector(".item-editor");
+            if (!editor) return;
+            const isOpen = editor.style.display === "block";
+            if (isOpen) {
+                editor.style.display = "none";
+                openSet.delete(itemId);
+                return;
+            }
+
+            for (const openId of Array.from(openSet)) {
+                if (openId === itemId) continue;
+                const openEditor = document.getElementById(`category-item-editor-${openId}`);
+                if (openEditor) openEditor.style.display = "none";
+                openSet.delete(openId);
+            }
+
+            editor.style.display = "block";
+            openSet.add(itemId);
+            await renderInlineItemEditor(editor, itemId, category.categoryId);
+        });
+
+        for (const itemId of openSet) {
+            const editor = document.getElementById(`category-item-editor-${itemId}`);
+            if (editor) {
+                editor.style.display = "block";
+                renderInlineItemEditor(editor, itemId, category.categoryId);
+            }
+        }
+    }
 }
 
 async function saveCategoryChanges(categoryId) {
@@ -590,6 +769,7 @@ async function saveCategoryChanges(categoryId) {
         return;
     }
 
+    const previous = state.currentCategory ? {...state.currentCategory} : null;
     const payload = {
         catName: document.getElementById("category-name").value.trim(),
         chosenColour,
@@ -601,8 +781,158 @@ async function saveCategoryChanges(categoryId) {
             method: "PATCH",
             body: JSON.stringify(payload)
         });
-        showToast("Category updated");
+        showUndo("Category updated", async () => {
+            if (!previous) return;
+            await api(`/api/categories/${categoryId}`, {
+                method: "PATCH",
+                body: JSON.stringify({
+                    catName: previous.catName ?? "",
+                    chosenColour: previous.chosenColour ?? "",
+                    extraCatInfo: previous.extraCatInfo ?? ""
+                })
+            });
+            const restored = await api(`/api/categories/${categoryId}`);
+            const items = await api(`/api/categories/${categoryId}/items`);
+            renderCategoryDetail(restored.category, items.items || []);
+        });
         await searchCategoriesManager();
+        const updated = await api(`/api/categories/${categoryId}`);
+        const items = await api(`/api/categories/${categoryId}/items`);
+        renderCategoryDetail(updated.category, items.items || []);
+    } catch (err) {
+        showToast(err.message || "Update failed", "error");
+    }
+}
+
+async function searchAllergiesManager() {
+    const term = allergySearchInput.value.trim();
+    const sort = allergySortSelect.value || "name";
+    allergyResults.innerHTML = `<li class="muted">Searching...</li>`;
+    try {
+        const data = await api(`/api/allergies?search=${encodeURIComponent(term)}&limit=50&sort=${encodeURIComponent(sort)}`);
+        state.allergies = data.allergies;
+        if (!state.allergies.length) {
+            allergyResults.innerHTML = `<li class="muted">No allergies found.</li>`;
+            return;
+        }
+        allergyResults.innerHTML = state.allergies
+            .map(allergy => `
+                <li data-id="${allergy.allergyId}">
+                    ${escapeHtml(allergy.allergyName)}
+                    <span class="muted">#${allergy.allergyId}</span>
+                </li>
+            `)
+            .join("");
+    } catch (err) {
+        allergyResults.innerHTML = `<li class="muted">Search failed.</li>`;
+    }
+}
+
+async function selectAllergy(allergyId) {
+    state.selectedAllergyId = allergyId;
+    for (const li of allergyResults.querySelectorAll("li")) {
+        li.classList.toggle("active", Number(li.dataset.id) === allergyId);
+    }
+
+    allergyDetail.innerHTML = `<div class="detail-empty">Loading allergy...</div>`;
+
+    try {
+        const [data, itemsData] = await Promise.all([
+            api(`/api/allergies/${allergyId}`),
+            api(`/api/allergies/${allergyId}/items`)
+        ]);
+        renderAllergyDetail(data.allergy, itemsData.items || []);
+    } catch (err) {
+        allergyDetail.innerHTML = `<div class="detail-empty">Failed to load allergy.</div>`;
+    }
+}
+
+function renderAllergyDetail(allergy, items = []) {
+    state.currentAllergy = allergy;
+    allergyDetail.innerHTML = `
+        <div class="form-grid">
+            <div class="form-field">
+                <label class="label">Allergy name</label>
+                <input id="allergy-name" value="${escapeHtml(allergy.allergyName ?? "")}" />
+            </div>
+        </div>
+        <div class="actions" style="margin-top: 14px;">
+            <button class="btn primary" id="save-allergy">Save allergy changes</button>
+        </div>
+        <div style="margin-top: 16px;">
+            <div class="label">Items with this allergy</div>
+            <ul class="list removable" id="allergy-items" style="margin-top: 8px;">
+                ${items.length
+        ? items.map(item => `
+                        <li data-id="${item.itemId}">
+                            <div class="item-row">
+                                <span>${escapeHtml(item.itemName)} <span class="muted">#${item.itemId}</span></span>
+                                <button class="remove-btn" type="button" data-item-id="${item.itemId}" aria-label="Remove">×</button>
+                            </div>
+                        </li>
+                    `).join("")
+        : `<li class="muted">No items for this allergy.</li>`
+    }
+            </ul>
+        </div>
+    `;
+
+    document.getElementById("save-allergy").addEventListener("click", () => {
+        saveAllergyChanges(allergy.allergyId);
+    });
+
+    const itemsList = document.getElementById("allergy-items");
+    if (itemsList) {
+        itemsList.addEventListener("click", async event => {
+            const button = event.target.closest(".remove-btn");
+            if (!button) return;
+            const itemId = Number.parseInt(button.dataset.itemId, 10);
+            if (!Number.isInteger(itemId)) return;
+            try {
+                await api(`/api/items/${itemId}/allergy/remove`, {
+                    method: "POST",
+                    body: JSON.stringify({allergyId: allergy.allergyId})
+                });
+                showUndo("Allergy removed", async () => {
+                    await api(`/api/items/${itemId}/allergy/add`, {
+                        method: "POST",
+                        body: JSON.stringify({allergyId: allergy.allergyId})
+                    });
+                    const restored = await api(`/api/allergies/${allergy.allergyId}/items`);
+                    renderAllergyDetail(allergy, restored.items || []);
+                });
+                const refreshed = await api(`/api/allergies/${allergy.allergyId}/items`);
+                renderAllergyDetail(allergy, refreshed.items || []);
+            } catch (err) {
+                showToast(err.message || "Remove failed", "error");
+            }
+        });
+    }
+}
+
+async function saveAllergyChanges(allergyId) {
+    const name = document.getElementById("allergy-name").value.trim();
+    const previous = state.currentAllergy ? {...state.currentAllergy} : null;
+
+    try {
+        await api(`/api/allergies/${allergyId}`, {
+            method: "PATCH",
+            body: JSON.stringify({allergyName: name})
+        });
+        showUndo("Allergy updated", async () => {
+            if (!previous) return;
+            await api(`/api/allergies/${allergyId}`, {
+                method: "PATCH",
+                body: JSON.stringify({allergyName: previous.allergyName ?? ""})
+            });
+            const restored = await api(`/api/allergies/${allergyId}`);
+            const items = await api(`/api/allergies/${allergyId}/items`);
+            renderAllergyDetail(restored.allergy, items.items || []);
+        });
+        await searchAllergiesManager();
+        const updated = await api(`/api/allergies/${allergyId}`);
+        const items = await api(`/api/allergies/${allergyId}/items`);
+        renderAllergyDetail(updated.allergy, items.items || []);
     } catch (err) {
         showToast(err.message || "Update failed", "error");
     }
@@ -618,95 +948,243 @@ async function selectItem(itemId) {
 
     try {
         const data = await api(`/api/items/${itemId}`);
-        renderItemDetail(data.item, data.categories || []);
+        renderItemDetail(data.item, data.categories || [], data.allergies || []);
     } catch (err) {
         itemDetail.innerHTML = `<div class="detail-empty">Failed to load item.</div>`;
     }
 }
 
-function renderItemDetail(item, categories) {
-    state.selectedCategoryId = null;
+function getItemFieldValue(prefix, field) {
+    const element = document.getElementById(`${prefix}-${field}`);
+    return element ? element.value : "";
+}
 
-    const categoryChips = categories.length
-        ? categories.map(cat => `<span class="chip">${escapeHtml(cat.catName)} (#${cat.categoryId})</span>`).join("")
-        : `<span class="muted">No category assigned.</span>`;
+async function refreshItemDetail(itemId, target = "main") {
+    const data = await api(`/api/items/${itemId}`);
+    if (target === "main") {
+        renderItemDetail(data.item, data.categories || [], data.allergies || []);
+        return;
+    }
+    if (typeof target === "function") {
+        await target(data.item, data.categories || [], data.allergies || []);
+    }
+}
 
-    itemDetail.innerHTML = `
+async function saveItemFromEditor(prefix, itemId, currentItem, refreshFn) {
+    const name = getItemFieldValue(prefix, "name").trim();
+    const priceValue = getItemFieldValue(prefix, "price").trim();
+    const price = Number.parseInt(priceValue, 10);
+    if (!Number.isInteger(price)) {
+        showToast("Price must be a number", "error");
+        return;
+    }
+
+    const chosenColour = getItemFieldValue(prefix, "colour").trim();
+    if (chosenColour && !isValidColorName(chosenColour)) {
+        showToast("Choose a valid C# Color", "error");
+        return;
+    }
+
+    const payload = {
+        itemName: name,
+        price,
+        chosenColour,
+        extraInfo: getItemFieldValue(prefix, "extra").trim(),
+        subCatId: getItemFieldValue(prefix, "subcat").trim() || null,
+        subItemOrder: getItemFieldValue(prefix, "suborder").trim() || null,
+        leadsToCategoryId: getItemFieldValue(prefix, "leads").trim() || null,
+        madeInKitchen: getItemFieldValue(prefix, "made")
+    };
+
+    try {
+        await api(`/api/items/${itemId}`, {
+            method: "PATCH",
+            body: JSON.stringify(payload)
+        });
+        showUndo("Item updated", async () => {
+            if (!currentItem) return;
+            await api(`/api/items/${itemId}`, {
+                method: "PATCH",
+                body: JSON.stringify({
+                    itemName: currentItem.itemName ?? "",
+                    price: currentItem.price ?? 0,
+                    chosenColour: currentItem.chosenColour ?? "",
+                    extraInfo: currentItem.extraInfo ?? "",
+                    subCatId: currentItem.subCatId ?? null,
+                    subItemOrder: currentItem.subItemOrder ?? null,
+                    leadsToCategoryId: currentItem.leadsToCategoryId ?? null,
+                    madeInKitchen: currentItem.madeInKitchen ?? 0
+                })
+            });
+            await refreshFn();
+        });
+        await refreshFn();
+        await searchItems();
+    } catch (err) {
+        showToast(err.message || "Update failed", "error");
+    }
+}
+
+function buildItemEditorMarkup(item, categories, allergies, prefix) {
+    const categoryChips = buildCategoryChips(categories);
+    const allergyChips = buildAllergyChips(allergies);
+    return `
         <div class="form-grid">
             <div class="form-field">
                 <label class="label">Item name</label>
-                <input id="item-name" value="${escapeHtml(item.itemName ?? "")}" />
+                <input id="${prefix}-name" value="${escapeHtml(item.itemName ?? "")}" />
             </div>
             <div class="form-field">
                 <label class="label">Price</label>
-                <input id="item-price" value="${item.price ?? ""}" />
+                <input id="${prefix}-price" value="${item.price ?? ""}" />
             </div>
             <div class="form-field">
                 <label class="label">Colour</label>
-                ${buildColorPicker("item-colour", item.chosenColour ?? "")}
+                ${buildColorPicker(`${prefix}-colour`, item.chosenColour ?? "")}
             </div>
             <div class="form-field">
                 <label class="label">Sub category ID</label>
-                <input id="item-subcat" value="${item.subCatId ?? ""}" />
+                <input id="${prefix}-subcat" value="${item.subCatId ?? ""}" />
             </div>
             <div class="form-field">
                 <label class="label">Sub item order</label>
-                <input id="item-suborder" value="${item.subItemOrder ?? ""}" />
+                <input id="${prefix}-suborder" value="${item.subItemOrder ?? ""}" />
             </div>
             <div class="form-field">
                 <label class="label">Leads to category</label>
-                <input id="item-leads" value="${item.leadsToCategoryId ?? ""}" />
+                <input id="${prefix}-leads" value="${item.leadsToCategoryId ?? ""}" />
             </div>
             <div class="form-field">
                 <label class="label">Made in kitchen</label>
-                <select id="item-made">
+                <select id="${prefix}-made">
                     <option value="1" ${Number(item.madeInKitchen) === 1 ? "selected" : ""}>Yes</option>
                     <option value="0" ${Number(item.madeInKitchen) === 0 ? "selected" : ""}>No</option>
                 </select>
             </div>
             <div class="form-field" style="grid-column: 1 / -1;">
                 <label class="label">Extra info</label>
-                <textarea id="item-extra">${escapeHtml(item.extraInfo ?? "")}</textarea>
+                <textarea id="${prefix}-extra">${escapeHtml(item.extraInfo ?? "")}</textarea>
             </div>
         </div>
         <div class="actions" style="margin-top: 14px;">
-            <button class="btn primary" id="save-item">Save item changes</button>
+            <button class="btn primary" id="${prefix}-save">Save item changes</button>
         </div>
 
         <div style="margin-top: 20px;">
             <div class="label">Current categories</div>
-            <div class="chips" id="current-categories" style="margin-top: 8px;">${categoryChips}</div>
+            <div class="chips" id="${prefix}-current-categories" style="margin-top: 8px;">${categoryChips}</div>
         </div>
 
         <div style="margin-top: 16px;">
-            <div class="label">modify category</div>
+            <div class="label">Modify category</div>
             <div class="form-grid" style="margin-top: 8px;">
                 <div class="form-field">
                     <label class="label">Category search</label>
-                    <input id="item-category-search" placeholder="Search by name" />
-                    <ul class="list" id="item-category-results" style="max-height: 160px;"></ul>
+                    <input id="${prefix}-category-search" placeholder="Search by name" />
+                    <ul class="list" id="${prefix}-category-results" style="max-height: 160px;"></ul>
                 </div>
                 <div class="form-field">
                     <label class="label">Category ID</label>
-                    <input id="item-category-id" placeholder="Enter ID" />
+                    <input id="${prefix}-category-id" placeholder="Enter ID" />
                     <div class="actions" style="margin-top: 10px;">
-                        <button class="btn secondary" id="item-add-category">Add category</button>
-                        <button class="btn primary" id="item-move-category">Move categories</button>
+                        <button class="btn secondary" id="${prefix}-add-category">Add category</button>
+                        <button class="btn primary" id="${prefix}-move-category">Move categories</button>
                     </div>
                 </div>
             </div>
         </div>
+
+        <div style="margin-top: 20px;">
+            <div class="label">Current allergies</div>
+            <div class="chips" id="${prefix}-current-allergies" style="margin-top: 8px;">${allergyChips}</div>
+        </div>
+
+        <div style="margin-top: 16px;">
+            <div class="label">Add allergy</div>
+            <div class="form-grid" style="margin-top: 8px;">
+                <div class="form-field">
+                    <label class="label">Allergy search</label>
+                    <input id="${prefix}-allergy-search" placeholder="Search by name" />
+                    <ul class="list" id="${prefix}-allergy-results" style="max-height: 160px;"></ul>
+                </div>
+                <div class="form-field">
+                    <label class="label">Allergy ID</label>
+                    <input id="${prefix}-allergy-id" placeholder="Enter ID" />
+                    <button class="btn secondary" id="${prefix}-add-allergy" style="margin-top: 10px;">Add allergy</button>
+                </div>
+            </div>
+        </div>
     `;
+}
 
-    const saveButton = document.getElementById("save-item");
-    initColorPicker("item-colour");
-    const categorySearch = document.getElementById("item-category-search");
-    const categoryResults = document.getElementById("item-category-results");
-    const categoryIdInput = document.getElementById("item-category-id");
-    const addCategoryBtn = document.getElementById("item-add-category");
-    const moveCategoryBtn = document.getElementById("item-move-category");
+function attachCategoryChipRemoval(container, itemId, refreshFn) {
+    container.addEventListener("click", async event => {
+        const button = event.target.closest("button");
+        if (!button) return;
+        const categoryId = Number.parseInt(button.dataset.categoryId, 10);
+        if (!Number.isInteger(categoryId)) return;
+        try {
+            await api(`/api/items/${itemId}/category/remove`, {
+                method: "POST",
+                body: JSON.stringify({categoryId})
+            });
+            showUndo("Category removed", async () => {
+                await api(`/api/items/${itemId}/category/add`, {
+                    method: "POST",
+                    body: JSON.stringify({categoryId})
+                });
+                await refreshFn();
+            });
+            await refreshFn();
+        } catch (err) {
+            showToast(err.message || "Remove failed", "error");
+        }
+    });
+}
 
-    saveButton.addEventListener("click", () => saveItemChanges(item.itemId));
+function attachAllergyChipRemoval(container, itemId, refreshFn) {
+    container.addEventListener("click", async event => {
+        const button = event.target.closest("button");
+        if (!button) return;
+        const allergyId = Number.parseInt(button.dataset.allergyId, 10);
+        if (!Number.isInteger(allergyId)) return;
+        try {
+            await api(`/api/items/${itemId}/allergy/remove`, {
+                method: "POST",
+                body: JSON.stringify({allergyId})
+            });
+            showUndo("Allergy removed", async () => {
+                await api(`/api/items/${itemId}/allergy/add`, {
+                    method: "POST",
+                    body: JSON.stringify({allergyId})
+                });
+                await refreshFn();
+            });
+            await refreshFn();
+        } catch (err) {
+            showToast(err.message || "Remove failed", "error");
+        }
+    });
+}
+
+function wireItemEditor(prefix, item, categories, allergies, refreshFn) {
+    initColorPicker(`${prefix}-colour`);
+    const categorySearch = document.getElementById(`${prefix}-category-search`);
+    const categoryResults = document.getElementById(`${prefix}-category-results`);
+    const categoryIdInput = document.getElementById(`${prefix}-category-id`);
+    const addCategoryBtn = document.getElementById(`${prefix}-add-category`);
+    const moveCategoryBtn = document.getElementById(`${prefix}-move-category`);
+    const saveButton = document.getElementById(`${prefix}-save`);
+    const currentCategories = document.getElementById(`${prefix}-current-categories`);
+    const allergySearch = document.getElementById(`${prefix}-allergy-search`);
+    const allergyResults = document.getElementById(`${prefix}-allergy-results`);
+    const allergyIdInput = document.getElementById(`${prefix}-allergy-id`);
+    const addAllergyBtn = document.getElementById(`${prefix}-add-allergy`);
+    const currentAllergies = document.getElementById(`${prefix}-current-allergies`);
+
+    saveButton.addEventListener("click", () => {
+        saveItemFromEditor(prefix, item.itemId, item, refreshFn);
+    });
 
     let categoryTimer = null;
     categorySearch.addEventListener("input", () => {
@@ -725,9 +1203,14 @@ function renderItemDetail(item, categories) {
                 method: "POST",
                 body: JSON.stringify({categoryId: targetId})
             });
-            showToast("Category added");
-            const updated = await api(`/api/items/${item.itemId}`);
-            renderItemDetail(updated.item, updated.categories || []);
+            showUndo("Category added", async () => {
+                await api(`/api/items/${item.itemId}/category/remove`, {
+                    method: "POST",
+                    body: JSON.stringify({categoryId: targetId})
+                });
+                await refreshFn();
+            });
+            await refreshFn();
         } catch (err) {
             showToast(err.message || "Category add failed", "error");
         }
@@ -739,20 +1222,135 @@ function renderItemDetail(item, categories) {
             showToast("Enter a valid category ID", "error");
             return;
         }
+        const previousCategories = Array.isArray(categories)
+            ? categories.map(cat => cat.categoryId)
+            : [];
         try {
             await api(`/api/items/${item.itemId}/category`, {
                 method: "POST",
                 body: JSON.stringify({categoryId: targetId})
             });
-            showToast("Categories moved");
-            const updated = await api(`/api/items/${item.itemId}`);
-            renderItemDetail(updated.item, updated.categories || []);
+            showUndo("Categories moved", async () => {
+                if (previousCategories.length === 0) {
+                    await api(`/api/items/${item.itemId}/category`, {
+                        method: "POST",
+                        body: JSON.stringify({categoryId: null})
+                    });
+                } else {
+                    if (!previousCategories.includes(targetId)) {
+                        await api(`/api/items/${item.itemId}/category/remove`, {
+                            method: "POST",
+                            body: JSON.stringify({categoryId: targetId})
+                        });
+                    }
+                    for (const categoryId of previousCategories) {
+                        await api(`/api/items/${item.itemId}/category/add`, {
+                            method: "POST",
+                            body: JSON.stringify({categoryId})
+                        });
+                    }
+                }
+                await refreshFn();
+            });
+            await refreshFn();
         } catch (err) {
             showToast(err.message || "Category move failed", "error");
         }
     });
+
+    if (currentCategories) {
+        attachCategoryChipRemoval(currentCategories, item.itemId, refreshFn);
+    }
+
+    if (allergySearch && allergyResults && allergyIdInput) {
+        let allergyTimer = null;
+        allergySearch.addEventListener("input", () => {
+            if (allergyTimer) clearTimeout(allergyTimer);
+            allergyTimer = setTimeout(() => searchAllergies(allergySearch.value, allergyResults, allergyIdInput), 250);
+        });
+    }
+
+    if (addAllergyBtn) {
+        addAllergyBtn.addEventListener("click", async () => {
+            const targetId = Number.parseInt(allergyIdInput.value, 10);
+            if (!Number.isInteger(targetId)) {
+                showToast("Enter a valid allergy ID", "error");
+                return;
+            }
+            try {
+                await api(`/api/items/${item.itemId}/allergy/add`, {
+                    method: "POST",
+                    body: JSON.stringify({allergyId: targetId})
+                });
+                showUndo("Allergy added", async () => {
+                    await api(`/api/items/${item.itemId}/allergy/remove`, {
+                        method: "POST",
+                        body: JSON.stringify({allergyId: targetId})
+                    });
+                    await refreshFn();
+                });
+                await refreshFn();
+            } catch (err) {
+                showToast(err.message || "Allergy add failed", "error");
+            }
+        });
+    }
+
+    if (currentAllergies) {
+        attachAllergyChipRemoval(currentAllergies, item.itemId, refreshFn);
+    }
 }
 
+async function renderInlineItemEditor(container, itemId, categoryId = null) {
+    container.innerHTML = `<div class="detail-empty">Loading item...</div>`;
+    try {
+        const data = await api(`/api/items/${itemId}`);
+        if (categoryId != null && !data.categories?.some(cat => cat.categoryId === categoryId)) {
+            await selectCategory(categoryId);
+            return;
+        }
+        const rowLabel = container.closest("li")?.querySelector(".item-row > span");
+        if (rowLabel) {
+            rowLabel.innerHTML = `${escapeHtml(data.item.itemName ?? "")} <span class="muted">#${data.item.itemId}</span>`;
+        }
+        const prefix = `inline-${itemId}`;
+        container.innerHTML = `
+            ${buildItemEditorMarkup(data.item, data.categories || [], data.allergies || [], prefix)}
+            <div class="actions" style="margin-top: 10px;">
+                <button class="btn ghost small" type="button" data-action="close-inline">Close edit</button>
+            </div>
+        `;
+        wireItemEditor(prefix, data.item, data.categories || [], data.allergies || [], async () => {
+            await renderInlineItemEditor(container, itemId, categoryId);
+        });
+        const closeBtn = container.querySelector("[data-action=\"close-inline\"]");
+        if (closeBtn) {
+            closeBtn.addEventListener("click", event => {
+                event.stopPropagation();
+                container.style.display = "none";
+                if (categoryId != null) {
+                    const openSet = getCategoryOpenSet(categoryId);
+                    openSet.delete(itemId);
+                }
+            });
+        }
+    } catch (err) {
+        container.innerHTML = `<div class="detail-empty">Failed to load item.</div>`;
+    }
+}
+
+function renderItemDetail(item, categories, allergies) {
+    state.selectedCategoryId = null;
+    state.currentItem = item;
+    state.currentItemCategories = Array.isArray(categories)
+        ? categories.map(cat => cat.categoryId)
+        : [];
+
+    itemDetail.innerHTML = buildItemEditorMarkup(item, categories, allergies || [], "item");
+    wireItemEditor("item", item, categories, allergies || [], async () => {
+        await refreshItemDetail(item.itemId, "main");
+    });
+}
 async function searchCategories(term, container, idInput) {
     container.innerHTML = `<li class="muted">Searching...</li>`;
     try {
@@ -773,6 +1371,34 @@ async function searchCategories(term, container, idInput) {
                 if (Number.isInteger(id)) {
                     idInput.value = id;
                     showToast(`Selected category #${id}`);
+                }
+            });
+        }
+    } catch (err) {
+        container.innerHTML = `<li class="muted">Search failed.</li>`;
+    }
+}
+
+async function searchAllergies(term, container, idInput) {
+    container.innerHTML = `<li class="muted">Searching...</li>`;
+    try {
+        const data = await api(`/api/allergies?search=${encodeURIComponent(term)}&limit=20&sort=name`);
+        if (!data.allergies.length) {
+            container.innerHTML = `<li class="muted">No allergies.</li>`;
+            return;
+        }
+        container.innerHTML = data.allergies
+            .map(allergy => `
+                <li data-id="${allergy.allergyId}">${escapeHtml(allergy.allergyName)} <span class="muted">#${allergy.allergyId}</span></li>
+            `)
+            .join("");
+
+        for (const li of container.querySelectorAll("li")) {
+            li.addEventListener("click", () => {
+                const id = Number.parseInt(li.dataset.id, 10);
+                if (Number.isInteger(id)) {
+                    idInput.value = id;
+                    showToast(`Selected allergy #${id}`);
                 }
             });
         }
@@ -807,12 +1433,33 @@ async function saveItemChanges(itemId) {
         madeInKitchen: document.getElementById("item-made").value
     };
 
+    const previous = state.currentItem ? {...state.currentItem} : null;
+
     try {
         await api(`/api/items/${itemId}`, {
             method: "PATCH",
             body: JSON.stringify(payload)
         });
-        showToast("Item updated");
+        showUndo("Item updated", async () => {
+            if (!previous) return;
+            await api(`/api/items/${itemId}`, {
+                method: "PATCH",
+                body: JSON.stringify({
+                    itemName: previous.itemName ?? "",
+                    price: previous.price ?? 0,
+                    chosenColour: previous.chosenColour ?? "",
+                    extraInfo: previous.extraInfo ?? "",
+                    subCatId: previous.subCatId ?? null,
+                    subItemOrder: previous.subItemOrder ?? null,
+                    leadsToCategoryId: previous.leadsToCategoryId ?? null,
+                    madeInKitchen: previous.madeInKitchen ?? 0
+                })
+            });
+            const restored = await api(`/api/items/${itemId}`);
+            renderItemDetail(restored.item, restored.categories || [], restored.allergies || []);
+        });
+        const updated = await api(`/api/items/${itemId}`);
+        renderItemDetail(updated.item, updated.categories || [], updated.allergies || []);
         await searchItems();
     } catch (err) {
         showToast(err.message || "Update failed", "error");
@@ -893,12 +1540,19 @@ function renderStaffDetail(member) {
     });
 
     document.getElementById("save-access").addEventListener("click", async () => {
+        const previousAccess = member.accessLevel;
         try {
             await api(`/api/staff/${member.id}/access`, {
                 method: "PATCH",
                 body: JSON.stringify({accessLevel: accessSelect.value})
             });
-            showToast("Access updated");
+            showUndo("Access updated", async () => {
+                await api(`/api/staff/${member.id}/access`, {
+                    method: "PATCH",
+                    body: JSON.stringify({accessLevel: previousAccess})
+                });
+                await searchStaff();
+            });
             await searchStaff();
         } catch (err) {
             showToast(err.message || "Update failed", "error");
@@ -1104,6 +1758,12 @@ categoryResults.addEventListener("click", event => {
     selectCategory(Number(li.dataset.id));
 });
 
+allergyResults.addEventListener("click", event => {
+    const li = event.target.closest("li");
+    if (!li || !li.dataset.id) return;
+    selectAllergy(Number(li.dataset.id));
+});
+
 staffResults.addEventListener("click", event => {
     const li = event.target.closest("li");
     if (!li || !li.dataset.id) return;
@@ -1119,6 +1779,13 @@ categorySearchInput.addEventListener("input", () => {
     if (categorySearchTimer) clearTimeout(categorySearchTimer);
     categorySearchTimer = setTimeout(searchCategoriesManager, 250);
 });
+
+allergySearchInput.addEventListener("input", () => {
+    if (allergySearchTimer) clearTimeout(allergySearchTimer);
+    allergySearchTimer = setTimeout(searchAllergiesManager, 250);
+});
+
+allergySortSelect.addEventListener("change", searchAllergiesManager);
 
 staffSearchInput.addEventListener("input", () => {
     if (staffSearchTimer) clearTimeout(staffSearchTimer);
