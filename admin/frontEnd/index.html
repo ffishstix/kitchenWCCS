@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Kitchen Admin</title>
+    <link rel="stylesheet" href="public/stylesheet.css"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+          rel="stylesheet">
+</head>
+<body>
+<div class="backdrop"></div>
+<div class="app">
+    <header class="topbar">
+        <div class="brand">
+            <div class="brand-title">Kitchen Admin</div>
+            <div class="brand-subtitle">Sales, menu, and access control</div>
+        </div>
+        <div class="auth">
+            <div class="status" id="auth-status">Signed out</div>
+            <div class="login" id="login-panel">
+                <input type="text" id="username" placeholder="Username" autocomplete="username"/>
+                <input type="password" id="password" placeholder="Password" autocomplete="current-password"/>
+                <button class="btn primary" id="login-btn">Sign in</button>
+            </div>
+            <button class="btn ghost" id="logout-btn" style="display: none;">Sign out</button>
+        </div>
+    </header>
+
+    <main class="grid">
+        <section class="panel" id="top-panel">
+            <div class="panel-header">
+                <h2>Top Sellers</h2>
+                <button class="btn secondary" id="refresh-top">Refresh</button>
+            </div>
+            <div class="panel-body">
+                <table class="table" id="top-table">
+                    <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Item</th>
+                        <th>Sold</th>
+                        <th>Price</th>
+                    </tr>
+                    </thead>
+                    <tbody id="top-table-body">
+                    <tr>
+                        <td colspan="4" class="muted">Sign in to load sales.</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel" id="items-panel">
+            <div class="panel-header">
+                <h2>Item Manager</h2>
+                <div class="panel-hint">Search, edit details, and move categories fast.</div>
+            </div>
+            <div class="panel-body columns">
+                <div class="column">
+                    <label class="label" for="item-search">Find item</label>
+                    <div class="search">
+                        <input id="item-search" type="text" placeholder="Search by name or ID"/>
+                    </div>
+                    <ul class="list" id="item-results"></ul>
+                </div>
+                <div class="column detail" id="item-detail">
+                    <div class="detail-empty">Select an item to edit.</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" id="categories-panel">
+            <div class="panel-header">
+                <h2>Category Manager</h2>
+                <div class="panel-hint">Rename, recolor, or update extra info.</div>
+            </div>
+            <div class="panel-body columns">
+                <div class="column">
+                    <label class="label" for="category-search">Find category</label>
+                    <div class="search">
+                        <input id="category-search" type="text" placeholder="Search by name or ID"/>
+                    </div>
+                    <ul class="list" id="category-results"></ul>
+                </div>
+                <div class="column detail" id="category-detail">
+                    <div class="detail-empty">Select a category to edit.</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" id="reports-panel">
+            <div class="panel-header">
+                <h2>Sales Report</h2>
+                <div class="panel-hint">Choose dates, categories, or items. Default is everything.</div>
+            </div>
+            <div class="panel-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="label">Start date</label>
+                        <input id="report-start" type="date"/>
+                    </div>
+                    <div class="form-field">
+                        <label class="label">End date</label>
+                        <input id="report-end" type="date"/>
+                    </div>
+                </div>
+
+                <div class="columns" style="margin-top: 16px;">
+                    <div class="column">
+                        <label class="label">Filter categories</label>
+                        <div class="search">
+                            <input id="report-category-search" type="text" placeholder="Search category name"/>
+                        </div>
+                        <ul class="list" id="report-category-results"></ul>
+                        <div class="chips" id="report-category-chips"></div>
+                    </div>
+                    <div class="column">
+                        <label class="label">Filter items</label>
+                        <div class="search">
+                            <input id="report-item-search" type="text" placeholder="Search item name"/>
+                        </div>
+                        <ul class="list" id="report-item-results"></ul>
+                        <div class="chips" id="report-item-chips"></div>
+                    </div>
+                </div>
+
+                <div class="actions" style="margin-top: 16px;">
+                    <button class="btn primary" id="report-run">Run report</button>
+                    <button class="btn ghost" id="report-clear">Clear filters</button>
+                    <button class="btn secondary" id="report-print">Print</button>
+                </div>
+
+                <div class="report-summary" id="report-summary" style="margin-top: 12px;"></div>
+
+                <table class="table" id="report-table" style="margin-top: 16px;">
+                    <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Category</th>
+                        <th>Sold</th>
+                        <th>Price</th>
+                        <th>Revenue</th>
+                    </tr>
+                    </thead>
+                    <tbody id="report-table-body">
+                    <tr>
+                        <td colspan="5" class="muted">Run a report to view results.</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel" id="staff-panel">
+            <div class="panel-header">
+                <h2>Staff Access</h2>
+                <div class="panel-hint">Search staff and update access levels.</div>
+            </div>
+            <div class="panel-body columns">
+                <div class="column">
+                    <label class="label" for="staff-search">Find staff</label>
+                    <div class="search">
+                        <input id="staff-search" type="text" placeholder="Search by name or ID"/>
+                    </div>
+                    <ul class="list" id="staff-results"></ul>
+                </div>
+                <div class="column detail" id="staff-detail">
+                    <div class="detail-empty">Select a staff member to edit.</div>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="public/script.js"></script>
+</body>
+</html>

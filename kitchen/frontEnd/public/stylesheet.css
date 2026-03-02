@@ -1,7 +1,14 @@
 /* Page reset */
 * {
     box-sizing: border-box;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+}
+
+h1,
+h2,
+h3,
+.header {
+    font-family: "Space Grotesk", "IBM Plex Sans", sans-serif;
 }
 
 .header {
