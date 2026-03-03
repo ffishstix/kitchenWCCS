@@ -63,7 +63,7 @@
                 <div class="column">
                     <label class="label" for="item-search">Find item</label>
                     <div class="search">
-                        <input id="item-search" type="text" placeholder="Search by name or ID"/>
+                        <input id="item-search" type="text" placeholder="Search by name"/>
                     </div>
                     <div class="panel-block">
                         <div class="label">Add item</div>
@@ -98,7 +98,7 @@
                 <div class="column">
                     <label class="label" for="category-search">Find category</label>
                     <div class="search">
-                        <input id="category-search" type="text" placeholder="Search by name or ID"/>
+                        <input id="category-search" type="text" placeholder="Search by name"/>
                     </div>
                     <div class="panel-block">
                         <div class="label">Add category</div>
@@ -108,8 +108,8 @@
                                 <input id="category-create-name" type="text" placeholder="New category"/>
                             </div>
                             <div class="form-field">
-                                <label class="label" for="category-create-colour">Colour</label>
-                                <input id="category-create-colour" type="text" placeholder="e.g. Coral"/>
+                                <label class="label">Colour</label>
+                                <div id="category-create-colour-picker"></div>
                             </div>
                         </div>
                         <div class="actions">
@@ -127,13 +127,13 @@
         <section class="panel" id="allergies-panel">
             <div class="panel-header">
                 <h2>Allergy Manager</h2>
-                <div class="panel-hint">Search by name or ID, then edit.</div>
+                <div class="panel-hint">Search by name, then edit.</div>
             </div>
             <div class="panel-body columns">
                 <div class="column">
                     <label class="label" for="allergy-search">Find allergy</label>
                     <div class="search">
-                        <input id="allergy-search" type="text" placeholder="Search by name or ID"/>
+                        <input id="allergy-search" type="text" placeholder="Search by name"/>
                     </div>
                     <div class="panel-block">
                         <div class="label">Add allergy</div>
@@ -234,11 +234,15 @@
                 <div class="column">
                     <label class="label" for="staff-search">Find staff</label>
                     <div class="search">
-                        <input id="staff-search" type="text" placeholder="Search by name or ID"/>
+                        <input id="staff-search" type="text" placeholder="Search by name"/>
                     </div>
                     <div class="panel-block">
                         <div class="label">Add staff</div>
                         <div class="form-grid">
+                            <div class="form-field">
+                                <label class="label" for="staff-create-id">Staff ID</label>
+                                <input id="staff-create-id" type="text" placeholder="Required ID"/>
+                            </div>
                             <div class="form-field">
                                 <label class="label" for="staff-create-name">Staff name</label>
                                 <input id="staff-create-name" type="text" placeholder="New staff name"/>
@@ -264,6 +268,18 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="public/script.js"></script>
+<script src="public/js/constants.js"></script>
+<script src="public/js/state.js"></script>
+<script src="public/js/dom.js"></script>
+<script src="public/js/utils.js"></script>
+<script src="public/js/api.js"></script>
+<script src="public/js/top.js"></script>
+<script src="public/js/lookup.js"></script>
+<script src="public/js/categories.js"></script>
+<script src="public/js/allergies.js"></script>
+<script src="public/js/staff.js"></script>
+<script src="public/js/items.js"></script>
+<script src="public/js/reports.js"></script>
+<script src="public/js/init.js"></script>
 </body>
 </html>

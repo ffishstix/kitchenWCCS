@@ -127,6 +127,13 @@ body {
     transform: translateY(-1px);
 }
 
+.btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
 .grid {
     display: grid;
     gap: 24px;
