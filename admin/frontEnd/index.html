@@ -65,6 +65,22 @@
                     <div class="search">
                         <input id="item-search" type="text" placeholder="Search by name or ID"/>
                     </div>
+                    <div class="panel-block">
+                        <div class="label">Add item</div>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="label" for="item-create-name">Item name</label>
+                                <input id="item-create-name" type="text" placeholder="New item name"/>
+                            </div>
+                            <div class="form-field">
+                                <label class="label" for="item-create-price">Price (pence)</label>
+                                <input id="item-create-price" type="text" placeholder="350"/>
+                            </div>
+                        </div>
+                        <div class="actions">
+                            <button class="btn secondary" id="item-create-btn">Add item</button>
+                        </div>
+                    </div>
                     <ul class="list" id="item-results"></ul>
                 </div>
                 <div class="column detail" id="item-detail">
@@ -84,6 +100,22 @@
                     <div class="search">
                         <input id="category-search" type="text" placeholder="Search by name or ID"/>
                     </div>
+                    <div class="panel-block">
+                        <div class="label">Add category</div>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="label" for="category-create-name">Category name</label>
+                                <input id="category-create-name" type="text" placeholder="New category"/>
+                            </div>
+                            <div class="form-field">
+                                <label class="label" for="category-create-colour">Colour</label>
+                                <input id="category-create-colour" type="text" placeholder="e.g. Coral"/>
+                            </div>
+                        </div>
+                        <div class="actions">
+                            <button class="btn secondary" id="category-create-btn">Add category</button>
+                        </div>
+                    </div>
                     <ul class="list" id="category-results"></ul>
                 </div>
                 <div class="column detail" id="category-detail">
@@ -102,6 +134,18 @@
                     <label class="label" for="allergy-search">Find allergy</label>
                     <div class="search">
                         <input id="allergy-search" type="text" placeholder="Search by name or ID"/>
+                    </div>
+                    <div class="panel-block">
+                        <div class="label">Add allergy</div>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="label" for="allergy-create-name">Allergy name</label>
+                                <input id="allergy-create-name" type="text" placeholder="New allergy"/>
+                            </div>
+                        </div>
+                        <div class="actions">
+                            <button class="btn secondary" id="allergy-create-btn">Add allergy</button>
+                        </div>
                     </div>
                     <div class="form-field">
                         <label class="label">Sort by</label>
@@ -191,6 +235,22 @@
                     <label class="label" for="staff-search">Find staff</label>
                     <div class="search">
                         <input id="staff-search" type="text" placeholder="Search by name or ID"/>
+                    </div>
+                    <div class="panel-block">
+                        <div class="label">Add staff</div>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="label" for="staff-create-name">Staff name</label>
+                                <input id="staff-create-name" type="text" placeholder="New staff name"/>
+                            </div>
+                            <div class="form-field">
+                                <label class="label" for="staff-create-access">Access level</label>
+                                <select id="staff-create-access"></select>
+                            </div>
+                        </div>
+                        <div class="actions">
+                            <button class="btn secondary" id="staff-create-btn">Add staff</button>
+                        </div>
                     </div>
                     <ul class="list" id="staff-results"></ul>
                 </div>

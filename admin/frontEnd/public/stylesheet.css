@@ -111,6 +111,12 @@ body {
     box-shadow: 0 10px 20px rgba(43, 183, 166, 0.2);
 }
 
+.btn.danger {
+    background: #d1493f;
+    color: white;
+    box-shadow: 0 10px 20px rgba(209, 73, 63, 0.2);
+}
+
 .btn.ghost {
     background: transparent;
     color: var(--ink);
@@ -155,6 +161,20 @@ body {
 
 .panel-body {
     display: block;
+}
+
+.panel-block {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.panel-block .actions {
+    margin-top: 4px;
 }
 
 .columns {

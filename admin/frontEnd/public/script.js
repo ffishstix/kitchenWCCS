@@ -41,19 +41,30 @@ const refreshTopBtn = document.getElementById("refresh-top");
 const itemSearchInput = document.getElementById("item-search");
 const itemResults = document.getElementById("item-results");
 const itemDetail = document.getElementById("item-detail");
+const itemCreateName = document.getElementById("item-create-name");
+const itemCreatePrice = document.getElementById("item-create-price");
+const itemCreateBtn = document.getElementById("item-create-btn");
 
 const categorySearchInput = document.getElementById("category-search");
 const categoryResults = document.getElementById("category-results");
 const categoryDetail = document.getElementById("category-detail");
+const categoryCreateName = document.getElementById("category-create-name");
+const categoryCreateColour = document.getElementById("category-create-colour");
+const categoryCreateBtn = document.getElementById("category-create-btn");
 
 const allergySearchInput = document.getElementById("allergy-search");
 const allergySortSelect = document.getElementById("allergy-sort");
 const allergyResults = document.getElementById("allergy-results");
 const allergyDetail = document.getElementById("allergy-detail");
+const allergyCreateName = document.getElementById("allergy-create-name");
+const allergyCreateBtn = document.getElementById("allergy-create-btn");
 
 const staffSearchInput = document.getElementById("staff-search");
 const staffResults = document.getElementById("staff-results");
 const staffDetail = document.getElementById("staff-detail");
+const staffCreateName = document.getElementById("staff-create-name");
+const staffCreateAccess = document.getElementById("staff-create-access");
+const staffCreateBtn = document.getElementById("staff-create-btn");
 
 const reportStartInput = document.getElementById("report-start");
 const reportEndInput = document.getElementById("report-end");
@@ -596,6 +607,37 @@ async function searchItems() {
     }
 }
 
+async function createItem() {
+    const name = itemCreateName.value.trim();
+    const priceValue = itemCreatePrice.value.trim();
+    const price = Number.parseInt(priceValue, 10);
+
+    if (!name) {
+        showToast("Enter an item name", "error");
+        return;
+    }
+    if (!Number.isInteger(price)) {
+        showToast("Enter a valid price (pence)", "error");
+        return;
+    }
+
+    try {
+        const data = await api("/api/items", {
+            method: "POST",
+            body: JSON.stringify({itemName: name, price})
+        });
+        itemCreateName.value = "";
+        itemCreatePrice.value = "";
+        await searchItems();
+        if (data.item?.itemId) {
+            selectItem(data.item.itemId);
+        }
+        showToast("Item added");
+    } catch (err) {
+        showToast(err.message || "Item create failed", "error");
+    }
+}
+
 async function searchCategoriesManager() {
     const term = categorySearchInput.value.trim();
     categoryResults.innerHTML = `<li class="muted">Searching...</li>`;
@@ -616,6 +658,36 @@ async function searchCategoriesManager() {
             .join("");
     } catch (err) {
         categoryResults.innerHTML = `<li class="muted">Search failed.</li>`;
+    }
+}
+
+async function createCategory() {
+    const name = categoryCreateName.value.trim();
+    const chosenColour = categoryCreateColour.value.trim();
+
+    if (!name) {
+        showToast("Enter a category name", "error");
+        return;
+    }
+    if (chosenColour && !isValidColorName(chosenColour)) {
+        showToast("Choose a valid C# Color", "error");
+        return;
+    }
+
+    try {
+        const data = await api("/api/categories", {
+            method: "POST",
+            body: JSON.stringify({catName: name, chosenColour})
+        });
+        categoryCreateName.value = "";
+        categoryCreateColour.value = "";
+        await searchCategoriesManager();
+        if (data.category?.categoryId) {
+            selectCategory(data.category.categoryId);
+        }
+        showToast("Category added");
+    } catch (err) {
+        showToast(err.message || "Category create failed", "error");
     }
 }
 
@@ -667,6 +739,7 @@ function renderCategoryDetail(category, items = []) {
         </div>
         <div class="actions" style="margin-top: 14px;">
             <button class="btn primary" id="save-category">Save category changes</button>
+            <button class="btn danger" id="delete-category">Delete category</button>
         </div>
         <div style="margin-top: 16px;">
             <div class="label">Items in category</div>
@@ -692,6 +765,9 @@ function renderCategoryDetail(category, items = []) {
     initColorPicker("category-colour");
     document.getElementById("save-category").addEventListener("click", () => {
         saveCategoryChanges(category.categoryId);
+    });
+    document.getElementById("delete-category").addEventListener("click", async () => {
+        await deleteCategory(category.categoryId);
     });
 
     const itemsList = document.getElementById("category-items");
@@ -804,6 +880,22 @@ async function saveCategoryChanges(categoryId) {
     }
 }
 
+async function deleteCategory(categoryId) {
+    if (!Number.isInteger(categoryId)) return;
+    if (!confirm(`Delete category #${categoryId}?`)) return;
+
+    try {
+        await api(`/api/categories/${categoryId}`, {method: "DELETE"});
+        state.selectedCategoryId = null;
+        state.currentCategory = null;
+        categoryDetail.innerHTML = `<div class="detail-empty">Select a category to edit.</div>`;
+        await searchCategoriesManager();
+        showToast("Category deleted");
+    } catch (err) {
+        showToast(err.message || "Delete failed", "error");
+    }
+}
+
 async function searchAllergiesManager() {
     const term = allergySearchInput.value.trim();
     const sort = allergySortSelect.value || "name";
@@ -825,6 +917,29 @@ async function searchAllergiesManager() {
             .join("");
     } catch (err) {
         allergyResults.innerHTML = `<li class="muted">Search failed.</li>`;
+    }
+}
+
+async function createAllergy() {
+    const name = allergyCreateName.value.trim();
+    if (!name) {
+        showToast("Enter an allergy name", "error");
+        return;
+    }
+
+    try {
+        const data = await api("/api/allergies", {
+            method: "POST",
+            body: JSON.stringify({allergyName: name})
+        });
+        allergyCreateName.value = "";
+        await searchAllergiesManager();
+        if (data.allergy?.allergyId) {
+            selectAllergy(data.allergy.allergyId);
+        }
+        showToast("Allergy added");
+    } catch (err) {
+        showToast(err.message || "Allergy create failed", "error");
     }
 }
 
@@ -858,6 +973,7 @@ function renderAllergyDetail(allergy, items = []) {
         </div>
         <div class="actions" style="margin-top: 14px;">
             <button class="btn primary" id="save-allergy">Save allergy changes</button>
+            <button class="btn danger" id="delete-allergy">Delete allergy</button>
         </div>
         <div style="margin-top: 16px;">
             <div class="label">Items with this allergy</div>
@@ -879,6 +995,9 @@ function renderAllergyDetail(allergy, items = []) {
 
     document.getElementById("save-allergy").addEventListener("click", () => {
         saveAllergyChanges(allergy.allergyId);
+    });
+    document.getElementById("delete-allergy").addEventListener("click", async () => {
+        await deleteAllergy(allergy.allergyId);
     });
 
     const itemsList = document.getElementById("allergy-items");
@@ -935,6 +1054,22 @@ async function saveAllergyChanges(allergyId) {
         renderAllergyDetail(updated.allergy, items.items || []);
     } catch (err) {
         showToast(err.message || "Update failed", "error");
+    }
+}
+
+async function deleteAllergy(allergyId) {
+    if (!Number.isInteger(allergyId)) return;
+    if (!confirm(`Delete allergy #${allergyId}?`)) return;
+
+    try {
+        await api(`/api/allergies/${allergyId}`, {method: "DELETE"});
+        state.selectedAllergyId = null;
+        state.currentAllergy = null;
+        allergyDetail.innerHTML = `<div class="detail-empty">Select an allergy to edit.</div>`;
+        await searchAllergiesManager();
+        showToast("Allergy deleted");
+    } catch (err) {
+        showToast(err.message || "Delete failed", "error");
     }
 }
 
@@ -1025,9 +1160,28 @@ async function saveItemFromEditor(prefix, itemId, currentItem, refreshFn) {
     }
 }
 
+async function deleteItem(itemId) {
+    if (!Number.isInteger(itemId)) return;
+    if (!confirm(`Delete item #${itemId}?`)) return;
+
+    try {
+        await api(`/api/items/${itemId}`, {method: "DELETE"});
+        state.selectedItemId = null;
+        state.currentItem = null;
+        itemDetail.innerHTML = `<div class="detail-empty">Select an item to edit.</div>`;
+        await searchItems();
+        showToast("Item deleted");
+    } catch (err) {
+        showToast(err.message || "Delete failed", "error");
+    }
+}
+
 function buildItemEditorMarkup(item, categories, allergies, prefix) {
     const categoryChips = buildCategoryChips(categories);
     const allergyChips = buildAllergyChips(allergies);
+    const deleteButton = prefix === "item"
+        ? `<button class="btn danger" id="${prefix}-delete">Delete item</button>`
+        : "";
     return `
         <div class="form-grid">
             <div class="form-field">
@@ -1068,6 +1222,7 @@ function buildItemEditorMarkup(item, categories, allergies, prefix) {
         </div>
         <div class="actions" style="margin-top: 14px;">
             <button class="btn primary" id="${prefix}-save">Save item changes</button>
+            ${deleteButton}
         </div>
 
         <div style="margin-top: 20px;">
@@ -1175,6 +1330,7 @@ function wireItemEditor(prefix, item, categories, allergies, refreshFn) {
     const addCategoryBtn = document.getElementById(`${prefix}-add-category`);
     const moveCategoryBtn = document.getElementById(`${prefix}-move-category`);
     const saveButton = document.getElementById(`${prefix}-save`);
+    const deleteButton = document.getElementById(`${prefix}-delete`);
     const currentCategories = document.getElementById(`${prefix}-current-categories`);
     const allergySearch = document.getElementById(`${prefix}-allergy-search`);
     const allergyResults = document.getElementById(`${prefix}-allergy-results`);
@@ -1185,6 +1341,11 @@ function wireItemEditor(prefix, item, categories, allergies, refreshFn) {
     saveButton.addEventListener("click", () => {
         saveItemFromEditor(prefix, item.itemId, item, refreshFn);
     });
+    if (deleteButton) {
+        deleteButton.addEventListener("click", async () => {
+            await deleteItem(item.itemId);
+        });
+    }
 
     let categoryTimer = null;
     categorySearch.addEventListener("input", () => {
@@ -1489,6 +1650,48 @@ async function searchStaff() {
     }
 }
 
+function renderStaffCreateOptions() {
+    if (!staffCreateAccess) return;
+    if (!state.accessLevels.length) {
+        staffCreateAccess.innerHTML = `<option value="">No access levels</option>`;
+        staffCreateAccess.disabled = true;
+        return;
+    }
+    staffCreateAccess.disabled = false;
+    staffCreateAccess.innerHTML = state.accessLevels
+        .map(level => `<option value="${level.accessLevel}">${level.accessLevel}</option>`)
+        .join("");
+}
+
+async function createStaff() {
+    const name = staffCreateName.value.trim();
+    const accessLevel = staffCreateAccess.value;
+
+    if (!name) {
+        showToast("Enter a staff name", "error");
+        return;
+    }
+    if (!accessLevel) {
+        showToast("Select an access level", "error");
+        return;
+    }
+
+    try {
+        const data = await api("/api/staff", {
+            method: "POST",
+            body: JSON.stringify({name, accessLevel})
+        });
+        staffCreateName.value = "";
+        await searchStaff();
+        if (data.staff?.id) {
+            selectStaff(data.staff.id);
+        }
+        showToast("Staff added");
+    } catch (err) {
+        showToast(err.message || "Staff create failed", "error");
+    }
+}
+
 async function selectStaff(staffId) {
     state.selectedStaffId = staffId;
     for (const li of staffResults.querySelectorAll("li")) {
@@ -1525,6 +1728,7 @@ function renderStaffDetail(member) {
         </div>
         <div class="actions" style="margin-top: 14px;">
             <button class="btn secondary" id="save-access">Update access</button>
+            <button class="btn danger" id="delete-staff">Delete staff</button>
         </div>
         <div class="access-card" id="access-details" style="margin-top: 14px;"></div>
     `;
@@ -1558,6 +1762,25 @@ function renderStaffDetail(member) {
             showToast(err.message || "Update failed", "error");
         }
     });
+
+    document.getElementById("delete-staff").addEventListener("click", async () => {
+        await deleteStaff(member.id);
+    });
+}
+
+async function deleteStaff(staffId) {
+    if (!Number.isInteger(staffId)) return;
+    if (!confirm(`Delete staff #${staffId}?`)) return;
+
+    try {
+        await api(`/api/staff/${staffId}`, {method: "DELETE"});
+        state.selectedStaffId = null;
+        staffDetail.innerHTML = `<div class="detail-empty">Select a staff member to edit.</div>`;
+        await searchStaff();
+        showToast("Staff deleted");
+    } catch (err) {
+        showToast(err.message || "Delete failed", "error");
+    }
 }
 
 function updateAccessDetails(levelValue, container) {
@@ -1582,6 +1805,7 @@ async function loadAccessLevels() {
     } catch (err) {
         state.accessLevels = [];
     }
+    renderStaffCreateOptions();
 }
 
 function renderReportChips() {
@@ -1791,6 +2015,11 @@ staffSearchInput.addEventListener("input", () => {
     if (staffSearchTimer) clearTimeout(staffSearchTimer);
     staffSearchTimer = setTimeout(searchStaff, 250);
 });
+
+itemCreateBtn.addEventListener("click", createItem);
+categoryCreateBtn.addEventListener("click", createCategory);
+allergyCreateBtn.addEventListener("click", createAllergy);
+staffCreateBtn.addEventListener("click", createStaff);
 
 reportCategorySearch.addEventListener("input", () => {
     if (reportCategoryTimer) clearTimeout(reportCategoryTimer);
