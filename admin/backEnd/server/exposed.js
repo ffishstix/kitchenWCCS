@@ -128,25 +128,39 @@ function registerRoutes(app) {
             return;
         }
     
-        const madeInKitchen = req.body.madeInKitchen == null ? null : toBit(req.body.madeInKitchen);
-        if (req.body.madeInKitchen != null && madeInKitchen == null) {
+        const madeInKitchenInput = req.body.madeInKitchen;
+        const madeInKitchen = madeInKitchenInput == null || madeInKitchenInput === ""
+            ? null
+            : toBit(madeInKitchenInput);
+        if (madeInKitchenInput != null && madeInKitchenInput !== "" && madeInKitchen == null) {
             res.status(400).json({success: false, error: "Invalid madeInKitchen value"});
             return;
         }
+        const subCatId = toNullableInt(req.body.subCatId);
+        const subItemOrder = toNullableInt(req.body.subItemOrder);
+        const leadsToCategoryId = toNullableInt(req.body.leadsToCategoryId);
     
         try {
             const dbPool = await getPool();
-            const result = await dbPool
-                .request()
+            const request = dbPool.request()
                 .input("itemName", sql.VarChar(50), itemName)
                 .input("price", sql.Int, price)
                 .input("chosenColour", sql.VarChar(50), String(req.body.chosenColour || "").trim())
-                .input("extraInfo", sql.VarChar(100), String(req.body.extraInfo || "").trim())
-                .input("subCatId", sql.Int, toNullableInt(req.body.subCatId))
-                .input("subItemOrder", sql.Int, toNullableInt(req.body.subItemOrder))
-                .input("leadsToCategoryId", sql.Int, toNullableInt(req.body.leadsToCategoryId))
-                .input("madeInKitchen", sql.Bit, madeInKitchen)
-                .query(`
+                .input("extraInfo", sql.VarChar(100), String(req.body.extraInfo || "").trim());
+            if (subCatId != null) {
+                request.input("subCatId", sql.Int, subCatId);
+            }
+            if (subItemOrder != null) {
+                request.input("subItemOrder", sql.Int, subItemOrder);
+            }
+            if (leadsToCategoryId != null) {
+                request.input("leadsToCategoryId", sql.Int, leadsToCategoryId);
+            }
+            if (madeInKitchen != null) {
+                request.input("madeInKitchen", sql.Bit, madeInKitchen);
+            }
+
+            const result = await request.query(`
                     DECLARE @Inserted TABLE (
                         itemId int,
                         itemName varchar(50),
@@ -169,7 +183,14 @@ function registerRoutes(app) {
                            INSERTED.leadsToCategoryId,
                            INSERTED.madeInKitchen
                     INTO @Inserted
-                    VALUES (@itemName, @price, @chosenColour, @extraInfo, @subCatId, @subItemOrder, @leadsToCategoryId, @madeInKitchen);
+                    VALUES (@itemName,
+                            @price,
+                            @chosenColour,
+                            @extraInfo,
+                            ${subCatId == null ? "DEFAULT" : "@subCatId"},
+                            ${subItemOrder == null ? "DEFAULT" : "@subItemOrder"},
+                            ${leadsToCategoryId == null ? "DEFAULT" : "@leadsToCategoryId"},
+                            ${madeInKitchen == null ? "DEFAULT" : "@madeInKitchen"});
                     SELECT itemId,
                            itemName,
                            price,

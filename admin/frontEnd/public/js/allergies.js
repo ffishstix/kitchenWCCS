@@ -313,11 +313,32 @@ function renderAllergyDetail(allergy, items = []) {
             }
         });
     }
+
+    attachAutoSave(allergyDetail, async () => {
+        await saveAllergyChanges(allergy.allergyId);
+    }, () => {
+        if (state.selectedAllergyId !== allergy.allergyId) return false;
+        return allergyHasChanges(getAllergyEditorName(), state.currentAllergy);
+    });
+}
+
+function getAllergyEditorName() {
+    const nameInput = document.getElementById("allergy-name");
+    if (!nameInput) return null;
+    return nameInput.value.trim();
+}
+
+function allergyHasChanges(name, currentAllergy) {
+    if (name == null || !currentAllergy) return false;
+    const currentName = String(currentAllergy.allergyName ?? "").trim();
+    return name !== currentName;
 }
 
 async function saveAllergyChanges(allergyId) {
-    const name = document.getElementById("allergy-name").value.trim();
+    const name = getAllergyEditorName();
+    if (name == null) return;
     const previous = state.currentAllergy ? {...state.currentAllergy} : null;
+    if (!allergyHasChanges(name, state.currentAllergy)) return;
 
     try {
         await api(`/api/allergies/${allergyId}`, {
@@ -330,11 +351,13 @@ async function saveAllergyChanges(allergyId) {
                 method: "PATCH",
                 body: JSON.stringify({allergyName: previous.allergyName ?? ""})
             });
+            if (state.selectedAllergyId !== allergyId) return;
             const restored = await api(`/api/allergies/${allergyId}`);
             const items = await api(`/api/allergies/${allergyId}/items`);
             renderAllergyDetail(restored.allergy, items.items || []);
         });
         await searchAllergiesManager();
+        if (state.selectedAllergyId !== allergyId) return;
         const updated = await api(`/api/allergies/${allergyId}`);
         const items = await api(`/api/allergies/${allergyId}/items`);
         renderAllergyDetail(updated.allergy, items.items || []);

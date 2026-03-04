@@ -224,6 +224,49 @@ function getItemFieldValue(prefix, field) {
     return element ? element.value : "";
 }
 
+function getItemEditorSnapshot(prefix) {
+    const nameInput = document.getElementById(`${prefix}-name`);
+    const priceInput = document.getElementById(`${prefix}-price`);
+    if (!nameInput || !priceInput) return null;
+    return {
+        name: nameInput.value.trim(),
+        price: priceInput.value.trim(),
+        colour: getItemFieldValue(prefix, "colour").trim(),
+        extra: getItemFieldValue(prefix, "extra").trim(),
+        subcat: getItemFieldValue(prefix, "subcat").trim(),
+        suborder: getItemFieldValue(prefix, "suborder").trim(),
+        leads: getItemFieldValue(prefix, "leads").trim(),
+        made: getItemFieldValue(prefix, "made")
+    };
+}
+
+function normalizeItemForCompare(item) {
+    const madeValue = Number(item?.madeInKitchen) === 1 ? "1" : "0";
+    return {
+        name: String(item?.itemName ?? "").trim(),
+        price: String(item?.price ?? "").trim(),
+        colour: String(item?.chosenColour ?? "").trim(),
+        extra: String(item?.extraInfo ?? "").trim(),
+        subcat: item?.subCatId == null ? "" : String(item.subCatId),
+        suborder: item?.subItemOrder == null ? "" : String(item.subItemOrder),
+        leads: item?.leadsToCategoryId == null ? "" : String(item.leadsToCategoryId),
+        made: madeValue
+    };
+}
+
+function itemHasChanges(snapshot, currentItem) {
+    if (!snapshot || !currentItem) return false;
+    const current = normalizeItemForCompare(currentItem);
+    return snapshot.name !== current.name
+        || snapshot.price !== current.price
+        || snapshot.colour !== current.colour
+        || snapshot.extra !== current.extra
+        || snapshot.subcat !== current.subcat
+        || snapshot.suborder !== current.suborder
+        || snapshot.leads !== current.leads
+        || String(snapshot.made) !== current.made;
+}
+
 async function refreshItemDetail(itemId, target = "main") {
     const data = await api(`/api/items/${itemId}`);
     if (target === "main") {
@@ -236,29 +279,31 @@ async function refreshItemDetail(itemId, target = "main") {
 }
 
 async function saveItemFromEditor(prefix, itemId, currentItem, refreshFn) {
-    const name = getItemFieldValue(prefix, "name").trim();
-    const priceValue = getItemFieldValue(prefix, "price").trim();
-    const price = Number.parseInt(priceValue, 10);
+    const snapshot = getItemEditorSnapshot(prefix);
+    if (!snapshot) return;
+    if (!itemHasChanges(snapshot, currentItem)) return;
+
+    const price = Number.parseInt(snapshot.price, 10);
     if (!Number.isInteger(price)) {
         showToast("Price must be a number", "error");
         return;
     }
 
-    const chosenColour = getItemFieldValue(prefix, "colour").trim();
+    const chosenColour = snapshot.colour;
     if (chosenColour && !isValidColorName(chosenColour)) {
         showToast("Choose a valid C# Color", "error");
         return;
     }
 
     const payload = {
-        itemName: name,
+        itemName: snapshot.name,
         price,
         chosenColour,
-        extraInfo: getItemFieldValue(prefix, "extra").trim(),
-        subCatId: getItemFieldValue(prefix, "subcat").trim() || null,
-        subItemOrder: getItemFieldValue(prefix, "suborder").trim() || null,
-        leadsToCategoryId: getItemFieldValue(prefix, "leads").trim() || null,
-        madeInKitchen: getItemFieldValue(prefix, "made")
+        extraInfo: snapshot.extra,
+        subCatId: snapshot.subcat || null,
+        subItemOrder: snapshot.suborder || null,
+        leadsToCategoryId: snapshot.leads || null,
+        madeInKitchen: snapshot.made
     };
 
     try {
@@ -543,9 +588,11 @@ async function renderInlineItemEditor(container, itemId, categoryId = null) {
                 <button class="btn ghost small" type="button" data-action="close-inline">Close edit</button>
             </div>
         `;
-        wireItemEditor(prefix, data.item, data.categories || [], data.allergies || [], async () => {
+        const refreshInline = async () => {
+            if (!container.isConnected || container.style.display === "none") return;
             await renderInlineItemEditor(container, itemId, categoryId);
-        });
+        };
+        wireItemEditor(prefix, data.item, data.categories || [], data.allergies || [], refreshInline);
         const closeBtn = container.querySelector("[data-action=\"close-inline\"]");
         if (closeBtn) {
             closeBtn.addEventListener("click", event => {
@@ -557,6 +604,13 @@ async function renderInlineItemEditor(container, itemId, categoryId = null) {
                 }
             });
         }
+
+        attachAutoSave(container, async () => {
+            await saveItemFromEditor(prefix, itemId, data.item, refreshInline);
+        }, () => {
+            if (!container.isConnected || container.style.display === "none") return false;
+            return itemHasChanges(getItemEditorSnapshot(prefix), data.item);
+        });
     } catch (err) {
         container.innerHTML = `<div class="detail-empty">Failed to load item.</div>`;
     }
@@ -571,7 +625,16 @@ function renderItemDetail(item, categories, allergies) {
         : [];
 
     itemDetail.innerHTML = buildItemEditorMarkup(item, categories, allergies || [], "item");
-    wireItemEditor("item", item, categories, allergies || [], async () => {
+    const refreshMain = async () => {
+        if (state.selectedItemId !== item.itemId) return;
         await refreshItemDetail(item.itemId, "main");
+    };
+    wireItemEditor("item", item, categories, allergies || [], refreshMain);
+
+    attachAutoSave(itemDetail, async () => {
+        await saveItemFromEditor("item", item.itemId, item, refreshMain);
+    }, () => {
+        if (state.selectedItemId !== item.itemId) return false;
+        return itemHasChanges(getItemEditorSnapshot("item"), item);
     });
 }

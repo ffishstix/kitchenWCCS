@@ -404,21 +404,50 @@ function renderCategoryDetail(category, items = []) {
             }
         }
     }
+
+    attachAutoSave(categoryDetail, async () => {
+        await saveCategoryChanges(category.categoryId);
+    }, () => {
+        if (state.selectedCategoryId !== category.categoryId) return false;
+        const payload = getCategoryEditorPayload();
+        return categoryHasChanges(payload, state.currentCategory);
+    });
+}
+
+function getCategoryEditorPayload() {
+    const nameInput = document.getElementById("category-name");
+    const colourInput = document.getElementById("category-colour");
+    const extraInput = document.getElementById("category-extra-cat");
+    if (!nameInput || !colourInput || !extraInput) return null;
+    return {
+        catName: nameInput.value.trim(),
+        chosenColour: colourInput.value.trim(),
+        extraCatInfo: extraInput.value.trim()
+    };
+}
+
+function categoryHasChanges(payload, currentCategory) {
+    if (!payload || !currentCategory) return false;
+    const currentName = String(currentCategory.catName ?? "").trim();
+    const currentColour = String(currentCategory.chosenColour ?? "").trim();
+    const currentExtra = String(currentCategory.extraCatInfo ?? "").trim();
+    return payload.catName !== currentName
+        || payload.chosenColour !== currentColour
+        || payload.extraCatInfo !== currentExtra;
 }
 
 async function saveCategoryChanges(categoryId) {
-    const chosenColour = document.getElementById("category-colour").value.trim();
+    const payload = getCategoryEditorPayload();
+    if (!payload) return;
+
+    const chosenColour = payload.chosenColour;
     if (chosenColour && !isValidColorName(chosenColour)) {
         showToast("Choose a valid C# Color", "error");
         return;
     }
 
     const previous = state.currentCategory ? {...state.currentCategory} : null;
-    const payload = {
-        catName: document.getElementById("category-name").value.trim(),
-        chosenColour,
-        extraCatInfo: document.getElementById("category-extra-cat").value.trim()
-    };
+    if (!categoryHasChanges(payload, state.currentCategory)) return;
 
     try {
         await api(`/api/categories/${categoryId}`, {
@@ -435,11 +464,13 @@ async function saveCategoryChanges(categoryId) {
                     extraCatInfo: previous.extraCatInfo ?? ""
                 })
             });
+            if (state.selectedCategoryId !== categoryId) return;
             const restored = await api(`/api/categories/${categoryId}`);
             const items = await api(`/api/categories/${categoryId}/items`);
             renderCategoryDetail(restored.category, items.items || []);
         });
         await searchCategoriesManager();
+        if (state.selectedCategoryId !== categoryId) return;
         const updated = await api(`/api/categories/${categoryId}`);
         const items = await api(`/api/categories/${categoryId}/items`);
         renderCategoryDetail(updated.category, items.items || []);

@@ -195,6 +195,61 @@ function resetColorPicker(id) {
     if (swatch) swatch.style.background = "transparent";
 }
 
+function attachAutoSave(container, saveFn, shouldSave = null, debounceMs = 250) {
+    if (!container || typeof saveFn !== "function") return;
+    if (container._autoSaveCleanup) {
+        container._autoSaveCleanup();
+    }
+
+    let timer = null;
+    let inFlight = false;
+    let queued = false;
+
+    const runSave = async () => {
+        if (inFlight) {
+            queued = true;
+            return;
+        }
+        if (shouldSave && !shouldSave()) return;
+        inFlight = true;
+        try {
+            await saveFn();
+        } finally {
+            inFlight = false;
+            if (queued) {
+                queued = false;
+                runSave();
+            }
+        }
+    };
+
+    const scheduleSave = () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(runSave, debounceMs);
+    };
+
+    const onPointerDown = (event) => {
+        if (!event.target || !container.contains(event.target)) {
+            scheduleSave();
+        }
+    };
+
+    const onFocusOut = (event) => {
+        if (!container.contains(event.relatedTarget)) {
+            scheduleSave();
+        }
+    };
+
+    document.addEventListener("pointerdown", onPointerDown, true);
+    container.addEventListener("focusout", onFocusOut);
+
+    container._autoSaveCleanup = () => {
+        document.removeEventListener("pointerdown", onPointerDown, true);
+        container.removeEventListener("focusout", onFocusOut);
+        if (timer) clearTimeout(timer);
+    };
+}
+
 function clearActiveList(container) {
     if (!container) return;
     container.querySelectorAll(".active").forEach(li => li.classList.remove("active"));
