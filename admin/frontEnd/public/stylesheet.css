@@ -357,6 +357,28 @@ body {
     min-height: 70px;
 }
 
+.access-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px;
+}
+
+.access-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: white;
+    font-size: 13px;
+}
+
+.access-option input {
+    margin: 0;
+    accent-color: var(--accent-2);
+}
+
 .color-picker {
     position: relative;
 }

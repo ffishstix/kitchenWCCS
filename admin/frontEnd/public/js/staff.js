@@ -21,23 +21,108 @@ async function searchStaff() {
     }
 }
 
-function renderStaffCreateOptions() {
-    if (!staffCreateAccess) return;
-    if (!state.accessLevels.length) {
-        staffCreateAccess.innerHTML = `<option value="">No access levels</option>`;
-        staffCreateAccess.disabled = true;
-        updateStaffCreateButtons();
+const ACCESS_FIELDS = [
+    {key: "canSendThroughItems", label: "Send through items", id: "send"},
+    {key: "canDelete", label: "Delete", id: "delete"},
+    {key: "canNoSale", label: "No sale", id: "nosale"},
+    {key: "canViewTables", label: "View tables", id: "tables"}
+];
+
+function buildAccessControls(prefix, values = {}) {
+    return `
+        <div class="access-grid">
+            ${ACCESS_FIELDS.map(field => `
+                <label class="access-option">
+                    <input type="checkbox" id="${prefix}-${field.id}" ${values[field.key] ? "checked" : ""} />
+                    <span>${field.label}</span>
+                </label>
+            `).join("")}
+        </div>
+    `;
+}
+
+function defaultAccessValues() {
+    return {
+        canSendThroughItems: false,
+        canDelete: false,
+        canNoSale: false,
+        canViewTables: false
+    };
+}
+
+function normalizeAccessValues(level) {
+    return {
+        canSendThroughItems: Number(level?.canSendThroughItems) === 1,
+        canDelete: Number(level?.canDelete) === 1,
+        canNoSale: Number(level?.canNoSale) === 1,
+        canViewTables: Number(level?.canViewTables) === 1
+    };
+}
+
+function getAccessValuesForLevel(accessLevel) {
+    const level = state.accessLevels.find(item => String(item.accessLevel) === String(accessLevel));
+    return level ? normalizeAccessValues(level) : null;
+}
+
+function readAccessValues(prefix, fallback = null) {
+    const values = {};
+    let found = false;
+    ACCESS_FIELDS.forEach(field => {
+        const input = document.getElementById(`${prefix}-${field.id}`);
+        if (!input) return;
+        values[field.key] = Boolean(input.checked);
+        found = true;
+    });
+    return found ? values : fallback;
+}
+
+function setAccessValues(prefix, values) {
+    if (!values) return;
+    ACCESS_FIELDS.forEach(field => {
+        const input = document.getElementById(`${prefix}-${field.id}`);
+        if (input) {
+            input.checked = Boolean(values[field.key]);
+        }
+    });
+}
+
+function ensureStaffAccessDraft() {
+    if (state.staffAccessDraft) return;
+    if (state.accessLevels.length) {
+        state.staffAccessDraft = normalizeAccessValues(state.accessLevels[0]);
         return;
     }
-    staffCreateAccess.disabled = false;
-    staffCreateAccess.innerHTML = state.accessLevels
-        .map(level => `<option value="${level.accessLevel}">${level.accessLevel}</option>`)
-        .join("");
+    state.staffAccessDraft = defaultAccessValues();
+}
+
+function syncStaffCreateAccessUI() {
+    ensureStaffAccessDraft();
+    setAccessValues("staff-create", state.staffAccessDraft);
+    if (state.createMode.staff) {
+        setAccessValues("staff-new", state.staffAccessDraft);
+    }
+}
+
+function wireAccessInputs(prefix, onChange) {
+    ACCESS_FIELDS.forEach(field => {
+        const input = document.getElementById(`${prefix}-${field.id}`);
+        if (!input) return;
+        input.addEventListener("change", () => {
+            const values = readAccessValues(prefix, defaultAccessValues());
+            onChange(values);
+        });
+    });
+}
+
+function renderStaffCreateOptions() {
+    ensureStaffAccessDraft();
+    syncStaffCreateAccessUI();
     updateStaffCreateButtons();
 }
 
 async function createStaff(useTemplate = null) {
     const fromTemplate = useTemplate === null ? state.createMode.staff : useTemplate;
+    ensureStaffAccessDraft();
     const staffIdValue = (fromTemplate
         ? getInputValueById("staff-new-id", staffCreateId)
         : staffCreateId.value
@@ -47,9 +132,9 @@ async function createStaff(useTemplate = null) {
         ? getInputValueById("staff-new-name", staffCreateName)
         : staffCreateName.value
     ).trim();
-    const accessLevel = fromTemplate
-        ? getInputValueById("staff-new-access", staffCreateAccess)
-        : staffCreateAccess.value;
+    const accessValues = fromTemplate
+        ? readAccessValues("staff-new", state.staffAccessDraft)
+        : readAccessValues("staff-create", state.staffAccessDraft);
 
     if (!Number.isInteger(staffId)) {
         showToast("Enter a staff ID", "error");
@@ -59,19 +144,21 @@ async function createStaff(useTemplate = null) {
         showToast("Enter a staff name", "error");
         return;
     }
-    if (!accessLevel) {
-        showToast("Select an access level", "error");
+    if (!accessValues) {
+        showToast("Set access permissions", "error");
         return;
     }
 
     try {
+        state.staffAccessDraft = accessValues;
         const data = await api("/api/staff", {
             method: "POST",
-            body: JSON.stringify({staffId, name, accessLevel})
+            body: JSON.stringify({staffId, name, ...accessValues})
         });
         staffCreateId.value = "";
         staffCreateName.value = "";
         updateStaffCreateButtons();
+        await loadAccessLevels();
         await searchStaff();
         if (data.staff?.id) {
             selectStaff(data.staff.id);
@@ -88,8 +175,7 @@ function isStaffCreateReady() {
     const staffIdValue = getInputValueById("staff-new-id", staffCreateId).trim();
     const staffId = Number.parseInt(staffIdValue, 10);
     const name = getInputValueById("staff-new-name", staffCreateName).trim();
-    const accessLevel = getInputValueById("staff-new-access", staffCreateAccess);
-    return Number.isInteger(staffId) && Boolean(name) && Boolean(accessLevel);
+    return Number.isInteger(staffId) && Boolean(name);
 }
 
 function updateStaffCreateButtons() {
@@ -104,12 +190,9 @@ function renderStaffCreateTemplate() {
     state.selectedStaffId = null;
     clearActiveList(staffResults);
 
+    ensureStaffAccessDraft();
     const nameValue = staffCreateName.value.trim();
     const idValue = staffCreateId.value.trim();
-    const accessValue = staffCreateAccess.value || "";
-    const options = state.accessLevels.length
-        ? state.accessLevels.map(level => `<option value="${level.accessLevel}">${level.accessLevel}</option>`).join("")
-        : `<option value="">No access levels</option>`;
 
     staffDetail.innerHTML = `
         <div class="form-grid">
@@ -122,22 +205,14 @@ function renderStaffCreateTemplate() {
                 <input id="staff-new-name" value="${escapeHtml(nameValue)}" placeholder="New staff name" />
             </div>
             <div class="form-field">
-                <label class="label">Access level</label>
-                <select id="staff-new-access" ${state.accessLevels.length ? "" : "disabled"}>
-                    ${options}
-                </select>
+                <label class="label">Access</label>
+                ${buildAccessControls("staff-new", state.staffAccessDraft)}
             </div>
         </div>
         <div class="actions" style="margin-top: 14px;">
             <button class="btn primary" id="staff-template-create">Create staff</button>
         </div>
-        <div class="access-card" id="staff-new-access-details" style="margin-top: 14px;"></div>
     `;
-
-    const accessSelect = document.getElementById("staff-new-access");
-    if (accessSelect && accessValue) {
-        accessSelect.value = accessValue;
-    }
 
     wireStaffCreateTemplate();
 }
@@ -145,9 +220,7 @@ function renderStaffCreateTemplate() {
 function wireStaffCreateTemplate() {
     const idInput = document.getElementById("staff-new-id");
     const nameInput = document.getElementById("staff-new-name");
-    const accessSelect = document.getElementById("staff-new-access");
     const createButton = document.getElementById("staff-template-create");
-    const accessDetails = document.getElementById("staff-new-access-details");
 
     if (idInput) {
         idInput.addEventListener("input", () => {
@@ -167,18 +240,11 @@ function wireStaffCreateTemplate() {
         });
     }
 
-    if (accessSelect) {
-        accessSelect.addEventListener("change", () => {
-            if (staffCreateAccess.value !== accessSelect.value) {
-                staffCreateAccess.value = accessSelect.value;
-            }
-            updateAccessDetails(accessSelect.value, accessDetails);
-            updateStaffCreateButtons();
-        });
-        updateAccessDetails(accessSelect.value, accessDetails);
-    } else if (accessDetails) {
-        accessDetails.textContent = "Access level details unavailable.";
-    }
+    wireAccessInputs("staff-new", values => {
+        state.staffAccessDraft = values;
+        setAccessValues("staff-create", values);
+        updateStaffCreateButtons();
+    });
 
     if (createButton) {
         createButton.addEventListener("click", () => createStaff(true));
@@ -188,24 +254,23 @@ function wireStaffCreateTemplate() {
 }
 
 function syncStaffCreateFromLeft() {
+    const accessValues = readAccessValues("staff-create", state.staffAccessDraft);
+    if (accessValues) {
+        state.staffAccessDraft = accessValues;
+    }
     if (!state.createMode.staff) {
         updateStaffCreateButtons();
         return;
     }
     const idInput = document.getElementById("staff-new-id");
     const nameInput = document.getElementById("staff-new-name");
-    const accessSelect = document.getElementById("staff-new-access");
-    const accessDetails = document.getElementById("staff-new-access-details");
     if (idInput && idInput.value !== staffCreateId.value) {
         idInput.value = staffCreateId.value;
     }
     if (nameInput && nameInput.value !== staffCreateName.value) {
         nameInput.value = staffCreateName.value;
     }
-    if (accessSelect && accessSelect.value !== staffCreateAccess.value) {
-        accessSelect.value = staffCreateAccess.value;
-        updateAccessDetails(accessSelect.value, accessDetails);
-    }
+    setAccessValues("staff-new", state.staffAccessDraft);
     updateStaffCreateButtons();
 }
 
@@ -232,9 +297,8 @@ async function selectStaff(staffId) {
 
 function renderStaffDetail(member) {
     state.createMode.staff = false;
-    const options = state.accessLevels
-        .map(level => `<option value="${level.accessLevel}">${level.accessLevel}</option>`)
-        .join("");
+    const accessValues = getAccessValuesForLevel(member.accessLevel) || defaultAccessValues();
+    const previousAccess = {...accessValues};
 
     staffDetail.innerHTML = `
         <div class="form-grid">
@@ -247,10 +311,8 @@ function renderStaffDetail(member) {
                 <input id="staff-id" value="${member.id}" />
             </div>
             <div class="form-field">
-                <label class="label">Access level</label>
-                <select id="staff-access">
-                    ${options}
-                </select>
+                <label class="label">Access</label>
+                ${buildAccessControls("staff-access", accessValues)}
             </div>
         </div>
         <div class="actions" style="margin-top: 14px;">
@@ -258,18 +320,7 @@ function renderStaffDetail(member) {
             <button class="btn secondary" id="save-access">Update access</button>
             <button class="btn danger" id="delete-staff">Delete staff</button>
         </div>
-        <div class="access-card" id="access-details" style="margin-top: 14px;"></div>
     `;
-
-    const accessSelect = document.getElementById("staff-access");
-    accessSelect.value = member.accessLevel;
-
-    const accessDetails = document.getElementById("access-details");
-    updateAccessDetails(accessSelect.value, accessDetails);
-
-    accessSelect.addEventListener("change", () => {
-        updateAccessDetails(accessSelect.value, accessDetails);
-    });
 
     document.getElementById("save-staff").addEventListener("click", async () => {
         const nameInput = document.getElementById("staff-name");
@@ -312,20 +363,24 @@ function renderStaffDetail(member) {
     });
 
     document.getElementById("save-access").addEventListener("click", async () => {
-        const previousAccess = member.accessLevel;
+        const accessPayload = readAccessValues("staff-access", accessValues);
         try {
             await api(`/api/staff/${member.id}/access`, {
                 method: "PATCH",
-                body: JSON.stringify({accessLevel: accessSelect.value})
+                body: JSON.stringify(accessPayload)
             });
             showUndo("Access updated", async () => {
                 await api(`/api/staff/${member.id}/access`, {
                     method: "PATCH",
-                    body: JSON.stringify({accessLevel: previousAccess})
+                    body: JSON.stringify(previousAccess)
                 });
+                await loadAccessLevels();
                 await searchStaff();
+                await selectStaff(member.id);
             });
+            await loadAccessLevels();
             await searchStaff();
+            await selectStaff(member.id);
         } catch (err) {
             showToast(err.message || "Update failed", "error");
         }
@@ -349,21 +404,6 @@ async function deleteStaff(staffId) {
     } catch (err) {
         showToast(err.message || "Delete failed", "error");
     }
-}
-
-function updateAccessDetails(levelValue, container) {
-    const level = state.accessLevels.find(item => String(item.accessLevel) === String(levelValue));
-    if (!level) {
-        container.textContent = "Access level details unavailable.";
-        return;
-    }
-
-    container.innerHTML = `
-        <div>Send through items: ${Number(level.canSendThroughItems) ? "Yes" : "No"}</div>
-        <div>Delete: ${Number(level.canDelete) ? "Yes" : "No"}</div>
-        <div>No sale: ${Number(level.canNoSale) ? "Yes" : "No"}</div>
-        <div>View tables: ${Number(level.canViewTables) ? "Yes" : "No"}</div>
-    `;
 }
 
 async function loadAccessLevels() {

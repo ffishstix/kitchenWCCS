@@ -15,6 +15,90 @@ const {
     parseIdList
 } = require("./private");
 
+let accessLevelIdentity = null;
+
+async function isAccessLevelIdentity(dbPool) {
+    if (accessLevelIdentity != null) return accessLevelIdentity;
+    const result = await dbPool.request().query(`
+        SELECT COLUMNPROPERTY(OBJECT_ID('accessAlowances'), 'accessLevel', 'IsIdentity') AS isIdentity;
+    `);
+    accessLevelIdentity = result.recordset?.[0]?.isIdentity === 1;
+    return accessLevelIdentity;
+}
+
+function readAccessFlags(payload) {
+    const source = payload?.access && typeof payload.access === "object" ? payload.access : payload;
+    const flags = {
+        canSendThroughItems: toBit(source?.canSendThroughItems),
+        canDelete: toBit(source?.canDelete),
+        canNoSale: toBit(source?.canNoSale),
+        canViewTables: toBit(source?.canViewTables)
+    };
+    if (Object.values(flags).some(value => value == null)) {
+        return null;
+    }
+    return flags;
+}
+
+async function resolveAccessLevel(dbPool, flags) {
+    const existing = await dbPool
+        .request()
+        .input("canSendThroughItems", sql.Bit, flags.canSendThroughItems)
+        .input("canDelete", sql.Bit, flags.canDelete)
+        .input("canNoSale", sql.Bit, flags.canNoSale)
+        .input("canViewTables", sql.Bit, flags.canViewTables)
+        .query(`
+            SELECT TOP 1 accessLevel
+            FROM accessAlowances
+            WHERE canSendThroughItems = @canSendThroughItems
+              AND canDelete = @canDelete
+              AND canNoSale = @canNoSale
+              AND canViewTables = @canViewTables
+            ORDER BY accessLevel ASC;
+        `);
+
+    if (existing.recordset?.length) {
+        return existing.recordset[0].accessLevel;
+    }
+
+    const isIdentity = await isAccessLevelIdentity(dbPool);
+    if (isIdentity) {
+        const inserted = await dbPool
+            .request()
+            .input("canSendThroughItems", sql.Bit, flags.canSendThroughItems)
+            .input("canDelete", sql.Bit, flags.canDelete)
+            .input("canNoSale", sql.Bit, flags.canNoSale)
+            .input("canViewTables", sql.Bit, flags.canViewTables)
+            .query(`
+                DECLARE @Inserted TABLE (accessLevel int);
+                INSERT INTO accessAlowances (canSendThroughItems, canDelete, canNoSale, canViewTables)
+                OUTPUT INSERTED.accessLevel INTO @Inserted
+                VALUES (@canSendThroughItems, @canDelete, @canNoSale, @canViewTables);
+                SELECT accessLevel FROM @Inserted;
+            `);
+        return inserted.recordset?.[0]?.accessLevel ?? null;
+    }
+
+    const nextResult = await dbPool
+        .request()
+        .query("SELECT ISNULL(MAX(accessLevel), 0) + 1 AS nextLevel FROM accessAlowances;");
+    const nextLevel = nextResult.recordset?.[0]?.nextLevel;
+    if (nextLevel == null) return null;
+
+    await dbPool
+        .request()
+        .input("accessLevel", sql.Int, nextLevel)
+        .input("canSendThroughItems", sql.Bit, flags.canSendThroughItems)
+        .input("canDelete", sql.Bit, flags.canDelete)
+        .input("canNoSale", sql.Bit, flags.canNoSale)
+        .input("canViewTables", sql.Bit, flags.canViewTables)
+        .query(`
+            INSERT INTO accessAlowances (accessLevel, canSendThroughItems, canDelete, canNoSale, canViewTables)
+            VALUES (@accessLevel, @canSendThroughItems, @canDelete, @canNoSale, @canViewTables);
+        `);
+    return nextLevel;
+}
+
 function registerRoutes(app) {
     app.get("/", (req, res) => {
         res.sendFile(indexPath);
@@ -1120,23 +1204,32 @@ function registerRoutes(app) {
     app.post("/api/staff", requireAuth, async (req, res) => {
         const staffId = toNullableInt(req.body.staffId);
         const name = String(req.body.name || "").trim();
-        const accessLevel = toNullableInt(req.body.accessLevel);
+        let accessLevel = toNullableInt(req.body.accessLevel);
+        const accessFlags = accessLevel == null ? readAccessFlags(req.body) : null;
 
-        if (staffId == null || !name || accessLevel == null) {
-            res.status(400).json({success: false, error: "Staff ID, name, and access level are required"});
+        if (staffId == null || !name || (accessLevel == null && !accessFlags)) {
+            res.status(400).json({success: false, error: "Staff ID, name, and access settings are required"});
             return;
         }
-    
+
         try {
             const dbPool = await getPool();
-            const levelCheck = await dbPool
-                .request()
-                .input("accessLevel", sql.Int, accessLevel)
-                .query("SELECT accessLevel FROM accessAlowances WHERE accessLevel = @accessLevel");
-    
-            if (!levelCheck.recordset?.length) {
-                res.status(404).json({success: false, error: "Access level not found"});
-                return;
+            if (accessLevel == null) {
+                accessLevel = await resolveAccessLevel(dbPool, accessFlags);
+                if (accessLevel == null) {
+                    res.status(500).json({success: false, error: "Access level creation failed"});
+                    return;
+                }
+            } else {
+                const levelCheck = await dbPool
+                    .request()
+                    .input("accessLevel", sql.Int, accessLevel)
+                    .query("SELECT accessLevel FROM accessAlowances WHERE accessLevel = @accessLevel");
+
+                if (!levelCheck.recordset?.length) {
+                    res.status(404).json({success: false, error: "Access level not found"});
+                    return;
+                }
             }
 
             const existing = await dbPool
@@ -1314,25 +1407,34 @@ function registerRoutes(app) {
     
     app.patch("/api/staff/:id/access", requireAuth, async (req, res) => {
         const staffId = toNullableInt(req.params.id);
-        const accessLevel = toNullableInt(req.body.accessLevel);
-    
-        if (staffId == null || accessLevel == null) {
-            res.status(400).json({success: false, error: "Invalid staff id or access level"});
+        let accessLevel = toNullableInt(req.body.accessLevel);
+        const accessFlags = accessLevel == null ? readAccessFlags(req.body) : null;
+
+        if (staffId == null || (accessLevel == null && !accessFlags)) {
+            res.status(400).json({success: false, error: "Invalid staff id or access settings"});
             return;
         }
-    
+
         try {
             const dbPool = await getPool();
-            const levelCheck = await dbPool
-                .request()
-                .input("accessLevel", sql.Int, accessLevel)
-                .query("SELECT accessLevel FROM accessAlowances WHERE accessLevel = @accessLevel");
-    
-            if (!levelCheck.recordset?.length) {
-                res.status(404).json({success: false, error: "Access level not found"});
-                return;
+            if (accessLevel == null) {
+                accessLevel = await resolveAccessLevel(dbPool, accessFlags);
+                if (accessLevel == null) {
+                    res.status(500).json({success: false, error: "Access level creation failed"});
+                    return;
+                }
+            } else {
+                const levelCheck = await dbPool
+                    .request()
+                    .input("accessLevel", sql.Int, accessLevel)
+                    .query("SELECT accessLevel FROM accessAlowances WHERE accessLevel = @accessLevel");
+
+                if (!levelCheck.recordset?.length) {
+                    res.status(404).json({success: false, error: "Access level not found"});
+                    return;
+                }
             }
-    
+
             await dbPool
                 .request()
                 .input("staffId", sql.Int, staffId)

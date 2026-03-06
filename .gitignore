@@ -138,6 +138,9 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
-/.idea/vcs.xml
-/.idea/workspace.xml
-/.idea/git_toolbox_prj.xml
+
+# JetBrains IDE
+.idea/
+.idea/vcs.xml
+.idea/workspace.xml
+.idea/git_toolbox_prj.xml

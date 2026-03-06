@@ -51,9 +51,6 @@ async function createItem(useTemplate = null) {
         }
         payload.chosenColour = chosenColour;
         payload.extraInfo = getInputValueById("item-new-extra").trim();
-        payload.subCatId = getInputValueById("item-new-subcat").trim() || null;
-        payload.subItemOrder = getInputValueById("item-new-suborder").trim() || null;
-        payload.leadsToCategoryId = getInputValueById("item-new-leads").trim() || null;
         payload.madeInKitchen = getInputValueById("item-new-made");
     }
 
@@ -113,18 +110,6 @@ function renderItemCreateTemplate() {
             <div class="form-field">
                 <label class="label">Colour</label>
                 ${buildColorPicker("item-new-colour", "")}
-            </div>
-            <div class="form-field">
-                <label class="label">Sub category ID</label>
-                <input id="item-new-subcat" placeholder="Optional" />
-            </div>
-            <div class="form-field">
-                <label class="label">Sub item order</label>
-                <input id="item-new-suborder" placeholder="Optional" />
-            </div>
-            <div class="form-field">
-                <label class="label">Leads to category</label>
-                <input id="item-new-leads" placeholder="Optional" />
             </div>
             <div class="form-field">
                 <label class="label">Made in kitchen</label>
@@ -233,9 +218,6 @@ function getItemEditorSnapshot(prefix) {
         price: priceInput.value.trim(),
         colour: getItemFieldValue(prefix, "colour").trim(),
         extra: getItemFieldValue(prefix, "extra").trim(),
-        subcat: getItemFieldValue(prefix, "subcat").trim(),
-        suborder: getItemFieldValue(prefix, "suborder").trim(),
-        leads: getItemFieldValue(prefix, "leads").trim(),
         made: getItemFieldValue(prefix, "made")
     };
 }
@@ -247,9 +229,6 @@ function normalizeItemForCompare(item) {
         price: String(item?.price ?? "").trim(),
         colour: String(item?.chosenColour ?? "").trim(),
         extra: String(item?.extraInfo ?? "").trim(),
-        subcat: item?.subCatId == null ? "" : String(item.subCatId),
-        suborder: item?.subItemOrder == null ? "" : String(item.subItemOrder),
-        leads: item?.leadsToCategoryId == null ? "" : String(item.leadsToCategoryId),
         made: madeValue
     };
 }
@@ -261,9 +240,6 @@ function itemHasChanges(snapshot, currentItem) {
         || snapshot.price !== current.price
         || snapshot.colour !== current.colour
         || snapshot.extra !== current.extra
-        || snapshot.subcat !== current.subcat
-        || snapshot.suborder !== current.suborder
-        || snapshot.leads !== current.leads
         || String(snapshot.made) !== current.made;
 }
 
@@ -300,9 +276,6 @@ async function saveItemFromEditor(prefix, itemId, currentItem, refreshFn) {
         price,
         chosenColour,
         extraInfo: snapshot.extra,
-        subCatId: snapshot.subcat || null,
-        subItemOrder: snapshot.suborder || null,
-        leadsToCategoryId: snapshot.leads || null,
         madeInKitchen: snapshot.made
     };
 
@@ -320,9 +293,6 @@ async function saveItemFromEditor(prefix, itemId, currentItem, refreshFn) {
                     price: currentItem.price ?? 0,
                     chosenColour: currentItem.chosenColour ?? "",
                     extraInfo: currentItem.extraInfo ?? "",
-                    subCatId: currentItem.subCatId ?? null,
-                    subItemOrder: currentItem.subItemOrder ?? null,
-                    leadsToCategoryId: currentItem.leadsToCategoryId ?? null,
                     madeInKitchen: currentItem.madeInKitchen ?? 0
                 })
             });
@@ -370,18 +340,6 @@ function buildItemEditorMarkup(item, categories, allergies, prefix) {
             <div class="form-field">
                 <label class="label">Colour</label>
                 ${buildColorPicker(`${prefix}-colour`, item.chosenColour ?? "")}
-            </div>
-            <div class="form-field">
-                <label class="label">Sub category ID</label>
-                <input id="${prefix}-subcat" value="${item.subCatId ?? ""}" />
-            </div>
-            <div class="form-field">
-                <label class="label">Sub item order</label>
-                <input id="${prefix}-suborder" value="${item.subItemOrder ?? ""}" />
-            </div>
-            <div class="form-field">
-                <label class="label">Leads to category</label>
-                <input id="${prefix}-leads" value="${item.leadsToCategoryId ?? ""}" />
             </div>
             <div class="form-field">
                 <label class="label">Made in kitchen</label>

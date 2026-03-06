@@ -90,13 +90,20 @@ allergyCreateName.addEventListener("focus", activateAllergyCreateTemplate);
 allergyCreateName.addEventListener("input", syncAllergyCreateFromLeft);
 
 staffCreateName.addEventListener("focus", activateStaffCreateTemplate);
-staffCreateAccess.addEventListener("focus", activateStaffCreateTemplate);
 if (staffCreateId) {
     staffCreateId.addEventListener("focus", activateStaffCreateTemplate);
     staffCreateId.addEventListener("input", syncStaffCreateFromLeft);
 }
 staffCreateName.addEventListener("input", syncStaffCreateFromLeft);
-staffCreateAccess.addEventListener("change", syncStaffCreateFromLeft);
+[
+    staffCreateSend,
+    staffCreateDelete,
+    staffCreateNoSale,
+    staffCreateViewTables
+].filter(Boolean).forEach(input => {
+    input.addEventListener("focus", activateStaffCreateTemplate);
+    input.addEventListener("change", syncStaffCreateFromLeft);
+});
 
 itemCreateBtn.addEventListener("click", createItem);
 categoryCreateBtn.addEventListener("click", createCategory);

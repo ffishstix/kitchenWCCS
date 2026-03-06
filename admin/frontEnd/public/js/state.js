@@ -24,6 +24,7 @@ const state = {
     staff: [],
     selectedStaffId: null,
     accessLevels: [],
+    staffAccessDraft: null,
     reportCategories: [],
     reportItems: [],
     createMode: {
