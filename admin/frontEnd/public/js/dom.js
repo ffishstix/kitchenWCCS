@@ -35,10 +35,6 @@ const staffResults = document.getElementById("staff-results");
 const staffDetail = document.getElementById("staff-detail");
 const staffCreateId = document.getElementById("staff-create-id");
 const staffCreateName = document.getElementById("staff-create-name");
-const staffCreateSend = document.getElementById("staff-create-send");
-const staffCreateDelete = document.getElementById("staff-create-delete");
-const staffCreateNoSale = document.getElementById("staff-create-nosale");
-const staffCreateViewTables = document.getElementById("staff-create-tables");
 const staffCreateBtn = document.getElementById("staff-create-btn");
 
 const reportStartInput = document.getElementById("report-start");

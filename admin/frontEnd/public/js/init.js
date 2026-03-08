@@ -95,15 +95,6 @@ if (staffCreateId) {
     staffCreateId.addEventListener("input", syncStaffCreateFromLeft);
 }
 staffCreateName.addEventListener("input", syncStaffCreateFromLeft);
-[
-    staffCreateSend,
-    staffCreateDelete,
-    staffCreateNoSale,
-    staffCreateViewTables
-].filter(Boolean).forEach(input => {
-    input.addEventListener("focus", activateStaffCreateTemplate);
-    input.addEventListener("change", syncStaffCreateFromLeft);
-});
 
 itemCreateBtn.addEventListener("click", createItem);
 categoryCreateBtn.addEventListener("click", createCategory);

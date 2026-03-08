@@ -88,16 +88,11 @@ function setAccessValues(prefix, values) {
 
 function ensureStaffAccessDraft() {
     if (state.staffAccessDraft) return;
-    if (state.accessLevels.length) {
-        state.staffAccessDraft = normalizeAccessValues(state.accessLevels[0]);
-        return;
-    }
     state.staffAccessDraft = defaultAccessValues();
 }
 
 function syncStaffCreateAccessUI() {
     ensureStaffAccessDraft();
-    setAccessValues("staff-create", state.staffAccessDraft);
     if (state.createMode.staff) {
         setAccessValues("staff-new", state.staffAccessDraft);
     }
@@ -134,7 +129,7 @@ async function createStaff(useTemplate = null) {
     ).trim();
     const accessValues = fromTemplate
         ? readAccessValues("staff-new", state.staffAccessDraft)
-        : readAccessValues("staff-create", state.staffAccessDraft);
+        : (state.staffAccessDraft || defaultAccessValues());
 
     if (!Number.isInteger(staffId)) {
         showToast("Enter a staff ID", "error");
@@ -144,11 +139,6 @@ async function createStaff(useTemplate = null) {
         showToast("Enter a staff name", "error");
         return;
     }
-    if (!accessValues) {
-        showToast("Set access permissions", "error");
-        return;
-    }
-
     try {
         state.staffAccessDraft = accessValues;
         const data = await api("/api/staff", {
@@ -242,7 +232,6 @@ function wireStaffCreateTemplate() {
 
     wireAccessInputs("staff-new", values => {
         state.staffAccessDraft = values;
-        setAccessValues("staff-create", values);
         updateStaffCreateButtons();
     });
 
@@ -254,10 +243,6 @@ function wireStaffCreateTemplate() {
 }
 
 function syncStaffCreateFromLeft() {
-    const accessValues = readAccessValues("staff-create", state.staffAccessDraft);
-    if (accessValues) {
-        state.staffAccessDraft = accessValues;
-    }
     if (!state.createMode.staff) {
         updateStaffCreateButtons();
         return;
@@ -270,7 +255,6 @@ function syncStaffCreateFromLeft() {
     if (nameInput && nameInput.value !== staffCreateName.value) {
         nameInput.value = staffCreateName.value;
     }
-    setAccessValues("staff-new", state.staffAccessDraft);
     updateStaffCreateButtons();
 }
 
