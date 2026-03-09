@@ -54,6 +54,42 @@
             </div>
         </section>
 
+        <section class="panel" id="tables-panel">
+            <div class="panel-header">
+                <h2>Open Tables</h2>
+                <div class="panel-hint">Monitor active tabs and close them once settled.</div>
+            </div>
+            <div class="panel-body">
+                <div class="table-summary" id="open-table-summary"></div>
+                <div class="actions" style="margin-top: 12px;">
+                    <button class="btn secondary" id="refresh-open-tables">Refresh</button>
+                    <select id="open-table-filter" class="select-inline">
+                        <option value="all">All open tables</option>
+                        <option value="ready">Ready to close</option>
+                        <option value="kitchen">In kitchen</option>
+                    </select>
+                </div>
+                <table class="table" id="open-table">
+                    <thead>
+                    <tr>
+                        <th>Table</th>
+                        <th>Staff</th>
+                        <th>Status</th>
+                        <th>Items</th>
+                        <th>Total</th>
+                        <th>Opened</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody id="open-table-body">
+                    <tr>
+                        <td colspan="7" class="muted">Sign in to load open tables.</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
         <section class="panel" id="items-panel">
             <div class="panel-header">
                 <h2>Item Manager</h2>
@@ -276,6 +312,7 @@
 <script src="public/js/staff.js"></script>
 <script src="public/js/items.js"></script>
 <script src="public/js/reports.js"></script>
+<script src="public/js/tables.js"></script>
 <script src="public/js/init.js"></script>
 </body>
 </html>

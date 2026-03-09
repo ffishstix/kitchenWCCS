@@ -14,6 +14,8 @@ const state = {
     selectedItemId: null,
     currentItem: null,
     currentItemCategories: [],
+    openTables: [],
+    openTableFilter: "all",
     categories: [],
     selectedCategoryId: null,
     currentCategory: null,

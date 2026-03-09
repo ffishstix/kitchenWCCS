@@ -489,6 +489,87 @@ body {
     flex-wrap: wrap;
 }
 
+.select-inline {
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: white;
+    font-size: 13px;
+    font-family: inherit;
+}
+
+.table-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+.summary-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.summary-label {
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.summary-value {
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.summary-sub {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.status-pill.ready {
+    background: #e6f7f4;
+    color: #1a7d6f;
+    border-color: #bfe8e3;
+}
+
+.status-pill.kitchen {
+    background: #fff0e6;
+    color: #b85a2b;
+    border-color: #f3d2bd;
+}
+
+.status-pill.unknown {
+    background: #f1f1f1;
+    color: #6b5f52;
+    border-color: #e2ddd7;
+}
+
+.table tr.stale td {
+    background: rgba(255, 107, 53, 0.08);
+}
+
+.cell-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
 .access-card {
     background: white;
     border: 1px solid var(--border);
@@ -543,6 +624,7 @@ body {
     .backdrop,
     .topbar,
     #top-panel,
+    #tables-panel,
     #items-panel,
     #categories-panel,
     #staff-panel,

@@ -1,6 +1,7 @@
 async function loadInitialData() {
     await Promise.all([
         loadTopItems(),
+        loadOpenTables(),
         loadAccessLevels(),
         searchItems(),
         searchStaff(),
@@ -142,6 +143,18 @@ reportItemChips.addEventListener("click", event => {
 });
 
 refreshTopBtn.addEventListener("click", loadTopItems);
+if (refreshOpenTablesBtn) {
+    refreshOpenTablesBtn.addEventListener("click", loadOpenTables);
+}
+if (openTableFilter) {
+    openTableFilter.addEventListener("change", event => {
+        state.openTableFilter = event.target.value || "all";
+        renderOpenTables();
+    });
+}
+if (openTableBody) {
+    openTableBody.addEventListener("click", handleOpenTableClick);
+}
 loginBtn.addEventListener("click", attemptLogin);
 logoutBtn.addEventListener("click", () => {
     state.token = null;
