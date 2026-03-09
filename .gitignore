@@ -144,3 +144,4 @@ vite.config.ts.timestamp-*
 .idea/vcs.xml
 .idea/workspace.xml
 .idea/git_toolbox_prj.xml
+/qodana.yaml
