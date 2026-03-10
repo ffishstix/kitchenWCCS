@@ -1,4 +1,4 @@
-const sql = require("mssql");
+const sql = require("../../../global/sql");
 const crypto = require("crypto");
 const {logWith} = require("../../../global/logger");
 const {saveToken} = require("../tokenStore");
@@ -158,6 +158,68 @@ function registerRoutes(app) {
             res.json({success: true, items: result.recordset || []});
         } catch (err) {
             logWith("error", "db", "Top items query failed");
+            res.status(500).json({success: false, error: "Database error"});
+        }
+    });
+
+    app.get("/api/open-tables", requireAuth, async (req, res) => {
+        try {
+            const dbPool = await getPool();
+            const result = await dbPool
+                .request()
+                .query(`
+                    SELECT h.Id            AS headerId,
+                           h.tableNumber   AS tableNumber,
+                           h.sentDateTime  AS sentDateTime,
+                           h.finished      AS finished,
+                           h.staffId       AS staffId,
+                           s.name          AS staffName,
+                           COUNT(DISTINCT o.Id) AS orderCount,
+                           COUNT(ol.Id)    AS itemCount,
+                           COALESCE(SUM(ai.price), 0) AS grossTotal
+                    FROM headers h
+                             LEFT JOIN staff s ON s.Id = h.staffId
+                             LEFT JOIN orders o ON o.headerId = h.Id
+                             LEFT JOIN orderLine ol ON ol.orderId = o.Id
+                             LEFT JOIN allItems ai ON ai.itemId = ol.itemId
+                    WHERE ISNULL(h.finished, 0) < 2
+                    GROUP BY h.Id, h.tableNumber, h.sentDateTime, h.finished, h.staffId, s.name
+                    ORDER BY h.sentDateTime DESC;
+                `);
+            res.json({success: true, tables: result.recordset || []});
+        } catch (err) {
+            logWith("error", "db", "Open tables query failed");
+            res.status(500).json({success: false, error: "Database error"});
+        }
+    });
+
+    app.patch("/api/headers/:id/finish", requireAuth, async (req, res) => {
+        const headerId = toNullableInt(req.params.id);
+        if (headerId == null) {
+            res.status(400).json({success: false, error: "Invalid header id"});
+            return;
+        }
+
+        try {
+            const dbPool = await getPool();
+            const result = await dbPool
+                .request()
+                .input("headerId", sql.Int, headerId)
+                .query(`
+                    UPDATE headers
+                    SET finished = 2
+                    WHERE Id = @headerId;
+                    SELECT Id AS headerId, finished FROM headers WHERE Id = @headerId;
+                `);
+            const header = result.recordset?.[0];
+            if (!header) {
+                res.status(404).json({success: false, error: "Header not found"});
+                return;
+            }
+            logAudit("header.finish", {headerId});
+            res.json({success: true, header});
+        } catch (err) {
+            logWith("error", "db", "Header finish failed");
             res.status(500).json({success: false, error: "Database error"});
         }
     });

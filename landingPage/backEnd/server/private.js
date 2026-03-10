@@ -1,4 +1,4 @@
-const sql = require("mssql");
+const sql = require("../../../global/sql");
 const {logWith} = require("../../../global/logger");
 const {dbConfig} = require("./constants");
 const {state} = require("./state");
@@ -11,6 +11,15 @@ function getPool() {
 }
 
 function requestStatus(url, timeoutMs) {
+    if (process.env.NODE_ENV === "test" && process.env.MOCK_REMOTE_STATUS === "true") {
+        return Promise.resolve({
+            ok: true,
+            statusCode: 200,
+            error: null,
+            url
+        });
+    }
+
     return new Promise((resolve) => {
         let request;
         const target = new URL(url);

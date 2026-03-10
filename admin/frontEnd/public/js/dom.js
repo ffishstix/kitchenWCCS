@@ -8,6 +8,11 @@ const passwordInput = document.getElementById("password");
 const topTableBody = document.getElementById("top-table-body");
 const refreshTopBtn = document.getElementById("refresh-top");
 
+const openTableBody = document.getElementById("open-table-body");
+const openTableSummary = document.getElementById("open-table-summary");
+const refreshOpenTablesBtn = document.getElementById("refresh-open-tables");
+const openTableFilter = document.getElementById("open-table-filter");
+
 const itemSearchInput = document.getElementById("item-search");
 const itemResults = document.getElementById("item-results");
 const itemDetail = document.getElementById("item-detail");

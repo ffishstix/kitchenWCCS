@@ -5,7 +5,12 @@
   "scripts": {
     "kitchen": "nodemon kitchen/backEnd/server.js",
     "landing": "nodemon landingPage/backEnd/server.js",
-    "admin"  : "nodemon admin/backEnd/server.js"
+    "admin": "nodemon admin/backEnd/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:all": "npm run test && npm run test:e2e"
   },
   "keywords": [],
   "author": "FW",
@@ -14,8 +19,14 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "mssql": "^12.2.0",
+    "nodemon": "^3.1.11",
     "websocket": "^1.0.35",
-    "ws": "^8.19.0",
-    "nodemon": "^3.1.11"
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "msnodesqlv8": "^5.1.5",
+    "supertest": "^7.2.2",
+    "vitest": "^4.0.18"
   }
 }
