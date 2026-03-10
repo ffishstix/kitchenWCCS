@@ -1,4 +1,4 @@
-const sql = require("mssql");
+const sql = require("../../../global/sql");
 const crypto = require("crypto");
 const {logWith} = require("../../../global/logger");
 const {saveToken} = require("../tokenStore");

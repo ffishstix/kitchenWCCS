@@ -69,6 +69,7 @@ web_modules/
 .env
 .env.*
 !.env.example
+!.env.test.example
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -145,3 +146,5 @@ vite.config.ts.timestamp-*
 .idea/workspace.xml
 .idea/git_toolbox_prj.xml
 /qodana.yaml
+/scripts/db/restore-sqlexpress.ps1
+/.env.test.example
