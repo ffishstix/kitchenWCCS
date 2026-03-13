@@ -60,13 +60,8 @@ function handleUnauthorized() {
 }
 
 async function hashCredentials(username, password) {
-    const combined = username + password;
-    const hashBuffer = await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(combined)
-    );
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+    const hash = require("../../../../global/encryption.js");
+    return hash(String(username) + String(password));
 }
 
 async function attemptLogin() {

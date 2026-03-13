@@ -1,5 +1,5 @@
 const path = require("path");
-
+const hash = require("../../global/encryption.js");
 const envPath = process.env.DOTENV_CONFIG_PATH
     || (process.env.NODE_ENV === "test"
         ? path.resolve(__dirname, "..", "..", "..", ".env.test")
@@ -48,11 +48,7 @@ const dbConfig = useWindowsAuth
             idleTimeoutMillis: 30000
         }
     };
-
-const serverHash = crypto
-    .createHash("sha256")
-    .update(String(process.env.DB_USER || "") + String(process.env.DB_PASSWORD || ""))
-    .digest("hex");
+const serverHash = hash(String(process.env.DB_USER || "") + String(process.env.DB_PASSWORD || ""))
 
 module.exports = {
     PORT,
