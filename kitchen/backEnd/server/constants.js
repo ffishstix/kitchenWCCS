@@ -1,5 +1,5 @@
 const path = require("path");
-const hash = require("../../global/encryption.js");
+const hash = require("../../../global/encryption.js");
 const envPath = process.env.DOTENV_CONFIG_PATH
     || (process.env.NODE_ENV === "test"
         ? path.resolve(__dirname, "..", "..", "..", ".env.test")

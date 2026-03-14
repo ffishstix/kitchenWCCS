@@ -184,4 +184,10 @@ class raa255 {
 
 }
 
-export default raa255;
+function hash(msg, options) {
+    return raa255.hash(msg, options);
+}
+
+module.exports = hash;
+module.exports.hash = hash;
+module.exports.raa255 = raa255;
