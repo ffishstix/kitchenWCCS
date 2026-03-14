@@ -184,6 +184,7 @@ async function getFoodToBeMade() {
 
     const result = await pool.request().query(query);
     logWith("log", "db", "setting order to api");
+    if (result.recordset.lineMessage === null) logWith("warn", "getFoodToBeMade", "no line message received");
     return result.recordset.map(row => ({
         orderId: row.orderId,
         orderLineId: row.orderLineId,
