@@ -152,6 +152,7 @@ function registerRoutes(app) {
                              JOIN orders o ON o.Id = ol.orderId
                              JOIN headers h ON h.Id = o.headerId
                     WHERE h.finished = 1
+                    and ai.price != 0
                     GROUP BY ai.itemId, ai.itemName, ai.price
                     ORDER BY soldCount DESC, ai.itemName ASC;
                 `);
