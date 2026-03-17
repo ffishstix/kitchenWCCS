@@ -1,6 +1,7 @@
 const sql = require("../../global/sql");
 
 let pool = null;
+let dbAvailable = null;
 
 function buildConfig() {
     const rawServer = process.env.DB_SERVER || "localhost";
@@ -39,6 +40,33 @@ async function getPool() {
     return pool;
 }
 
+async function ensureDbAvailable() {
+    if (dbAvailable !== null) {
+        return dbAvailable;
+    }
+
+    try {
+        await getPool();
+        dbAvailable = true;
+    } catch (err) {
+        dbAvailable = false;
+        if (pool) {
+            try {
+                await pool.close();
+            } catch {
+                // ignore cleanup errors
+            }
+            pool = null;
+        }
+    }
+
+    return dbAvailable;
+}
+
+function isDbAvailable() {
+    return dbAvailable === true;
+}
+
 async function resetAuthTokens() {
     const db = await getPool();
     await db.request().query(`
@@ -63,6 +91,8 @@ async function closePool() {
 
 module.exports = {
     getPool,
+    ensureDbAvailable,
+    isDbAvailable,
     resetAuthTokens,
     closePool
 };

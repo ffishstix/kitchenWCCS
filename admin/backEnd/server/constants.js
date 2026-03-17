@@ -5,7 +5,7 @@ const envPath = process.env.DOTENV_CONFIG_PATH
         ? path.resolve(__dirname, "..", "..", "..", ".env.test")
         : path.resolve(__dirname, "..", "..", "..", ".env"));
 require("dotenv").config({path: envPath});
-const hash = require("../../global/encryption.js");
+const hash = require("../../../global/encryption.js");
 
 const PORT = 1249;
 const TOKEN_TTL_MS = 6 * 30 * 24 * 60 * 60 * 1000;

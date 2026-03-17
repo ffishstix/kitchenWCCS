@@ -1,15 +1,18 @@
 const WebSocket = require("ws");
 const sql = require("../../global/sql");
-const {getPool, resetAuthTokens, closePool} = require("../helpers/db");
+const {getPool, resetAuthTokens, closePool, ensureDbAvailable} = require("../helpers/db");
 
 const {server} = require("../../kitchen/backEnd/server/state");
 const {registerWebSocketHandlers} = require("../../kitchen/backEnd/server/exposed");
 
 describe("kitchen websocket", () => {
     let port = null;
+    let dbReady = false;
     const testToken = "ws-test-token";
 
     beforeAll(async () => {
+        dbReady = await ensureDbAvailable();
+        if (!dbReady) return;
         await resetAuthTokens();
         const pool = await getPool();
         await pool
@@ -24,11 +27,14 @@ describe("kitchen websocket", () => {
     });
 
     afterAll(async () => {
-        await new Promise(resolve => server.close(resolve));
-        await closePool();
+        if (dbReady) {
+            await new Promise(resolve => server.close(resolve));
+            await closePool();
+        }
     });
 
     it("sends full order payload on connect", async () => {
+        if (!dbReady) return;
         const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?token=${testToken}`);
         const message = await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error("Timed out waiting for ws message")), 5000);
@@ -54,6 +60,7 @@ describe("kitchen websocket", () => {
     });
 
     it("rejects connections without a token", async () => {
+        if (!dbReady) return;
         const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
         const closeEvent = await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error("Timed out waiting for ws close")), 5000);

@@ -7,6 +7,7 @@ module.exports = {
         testTimeout: 20000,
         hookTimeout: 20000,
         threads: false,
+        sequence: {concurrent: false},
         globals: true,
         exclude: ["**/node_modules/**", "tests/e2e/**"]
     }

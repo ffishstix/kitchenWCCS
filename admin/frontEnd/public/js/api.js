@@ -60,8 +60,10 @@ function handleUnauthorized() {
 }
 
 async function hashCredentials(username, password) {
-    const hash = require("../../../../global/encryption.js");
-    return hash(String(username) + String(password));
+    if (window.raa255?.hash) {
+        return window.raa255.hash(String(username) + String(password));
+    }
+    throw new Error("Hash module not loaded");
 }
 
 async function attemptLogin() {

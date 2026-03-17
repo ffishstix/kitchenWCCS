@@ -184,4 +184,21 @@ class raa255 {
 
 }
 
-export default raa255;
+function hash(msg, options) {
+    return raa255.hash(msg, options);
+}
+
+// CJS export for Node usage.
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = hash;
+    module.exports.hash = raa255.hash;
+    module.exports.default = hash;
+}
+
+// Also attach to window for browser usage without bundlers.
+if (typeof window !== "undefined") {
+    window.raa255 = {
+        hash,
+        default: hash
+    };
+}
