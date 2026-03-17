@@ -171,7 +171,7 @@ function resolveOrderUnfinishAt(orderId) {
 async function getFoodToBeMade() {
     const pool = await getPool();
 
-    const query = "select o.Id as orderId, oL.Id as orderLineId, ai.itemName as itemName, ol.message as message, s.name as staffName,\n" +
+    const query = "select o.Id as orderId, oL.Id as orderLineId, ai.itemName as itemName, ol.lineMessage as message, s.name as staffName,\n" +
         "       h.tableNumber as tableNumber, h.sentDateTime as sentDateTime, h.finished as finished\n" +
         "from allItems as ai, orderLine as oL, orders as o, headers as h, staff as s\n" +
         "where o.headerId = h.Id\n" +
@@ -184,6 +184,7 @@ async function getFoodToBeMade() {
 
     const result = await pool.request().query(query);
     logWith("log", "db", "setting order to api");
+    if (result.recordset.lineMessage === null) logWith("warn", "getFoodToBeMade", "no line message received");
     return result.recordset.map(row => ({
         orderId: row.orderId,
         orderLineId: row.orderLineId,
