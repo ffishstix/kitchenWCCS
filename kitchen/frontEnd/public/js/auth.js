@@ -13,10 +13,48 @@ function getCookie(name) {
 }
 
 async function hashCredentials(username, password) {
+    const module = await loadHashModule();
+    return module.hash(String(username) + String(password));
+}
+
+let hashLoadPromise = null;
+
+function loadHashModule() {
     if (window.raa255?.hash) {
-        return window.raa255.hash(String(username) + String(password));
+        return Promise.resolve(window.raa255);
     }
-    throw new Error("Hash module not loaded");
+    if (hashLoadPromise) {
+        return hashLoadPromise;
+    }
+
+    const candidates = ["/global/encryption.js", "../../global/encryption.js"];
+
+    hashLoadPromise = new Promise((resolve, reject) => {
+        const tryLoad = (index) => {
+            if (window.raa255?.hash) {
+                resolve(window.raa255);
+                return;
+            }
+            if (index >= candidates.length) {
+                reject(new Error("Hash module not loaded"));
+                return;
+            }
+
+            const script = document.createElement("script");
+            script.src = candidates[index];
+            script.async = true;
+            script.onload = () => {
+                if (window.raa255?.hash) resolve(window.raa255);
+                else tryLoad(index + 1);
+            };
+            script.onerror = () => tryLoad(index + 1);
+            document.head.appendChild(script);
+        };
+
+        tryLoad(0);
+    });
+
+    return hashLoadPromise;
 }
 
 async function attemptAutoLogin() {
