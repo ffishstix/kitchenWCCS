@@ -6,7 +6,8 @@ Kitchen and admin display for the workcloneCS program. Also serves as the landin
 - [ ] create sub menu's
 - [ ] add extra report options
 - [ ] create menu's with respect to items and categories so you can look back at old menu's
-- [ ] dont delete tables when they are finished 
+- [ ] dont delete tables when they are finished
+- [ ] filter by menu on review and allow exclude options
 
 ## License
 
