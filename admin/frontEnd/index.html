@@ -197,6 +197,41 @@
                 </div>
             </div>
         </section>
+        
+        <section class="panel" id="staff-panel">
+            <div class="panel-header">
+                <h2>Staff Access</h2>
+                <div class="panel-hint">Search staff and update access permissions.</div>
+            </div>
+            <div class="panel-body columns">
+                <div class="column">
+                    <label class="label" for="staff-search">Find staff</label>
+                    <div class="search">
+                        <input id="staff-search" type="text" placeholder="Search by name"/>
+                    </div>
+                    <div class="panel-block">
+                        <div class="label">Add staff</div>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="label" for="staff-create-id">Staff ID</label>
+                                <input id="staff-create-id" type="text" placeholder="Required ID"/>
+                            </div>
+                            <div class="form-field">
+                                <label class="label" for="staff-create-name">Staff name</label>
+                                <input id="staff-create-name" type="text" placeholder="New staff name"/>
+                            </div>
+                        </div>
+                        <div class="actions">
+                            <button class="btn secondary" id="staff-create-btn">Add staff</button>
+                        </div>
+                    </div>
+                    <ul class="list" id="staff-results"></ul>
+                </div>
+                <div class="column detail" id="staff-detail">
+                    <div class="detail-empty">Select a staff member to edit.</div>
+                </div>
+            </div>
+        </section>
 
         <section class="panel" id="reports-panel">
             <div class="panel-header">
@@ -258,41 +293,6 @@
                     </tr>
                     </tbody>
                 </table>
-            </div>
-        </section>
-
-        <section class="panel" id="staff-panel">
-            <div class="panel-header">
-                <h2>Staff Access</h2>
-                <div class="panel-hint">Search staff and update access permissions.</div>
-            </div>
-            <div class="panel-body columns">
-                <div class="column">
-                    <label class="label" for="staff-search">Find staff</label>
-                    <div class="search">
-                        <input id="staff-search" type="text" placeholder="Search by name"/>
-                    </div>
-                    <div class="panel-block">
-                        <div class="label">Add staff</div>
-                        <div class="form-grid">
-                            <div class="form-field">
-                                <label class="label" for="staff-create-id">Staff ID</label>
-                                <input id="staff-create-id" type="text" placeholder="Required ID"/>
-                            </div>
-                            <div class="form-field">
-                                <label class="label" for="staff-create-name">Staff name</label>
-                                <input id="staff-create-name" type="text" placeholder="New staff name"/>
-                            </div>
-                        </div>
-                        <div class="actions">
-                            <button class="btn secondary" id="staff-create-btn">Add staff</button>
-                        </div>
-                    </div>
-                    <ul class="list" id="staff-results"></ul>
-                </div>
-                <div class="column detail" id="staff-detail">
-                    <div class="detail-empty">Select a staff member to edit.</div>
-                </div>
             </div>
         </section>
     </main>
