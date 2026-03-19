@@ -74,11 +74,10 @@ function loadHashModule() {
         return hashLoadPromise;
     }
 
-    const candidates = [
-        "/global/encryption.js",
-        "global/encryption.js",
-        "../../../../global/encryption.js"
-    ];
+    const isFileProtocol = window.location?.protocol === "file:";
+    const candidates = isFileProtocol
+        ? ["../../global/encryption.js"]
+        : ["/global/encryption.js", "../../global/encryption.js"];
 
     hashLoadPromise = new Promise((resolve, reject) => {
         const tryLoad = (index) => {
