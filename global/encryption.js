@@ -1,5 +1,6 @@
 class raa255 {
 
+    // Compute a raa255 hash for the provided message.
     static hash(msg, options) {
 
         const defaults = {msgFormat: 'string', outFormat: 'hex'};

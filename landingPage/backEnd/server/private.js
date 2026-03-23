@@ -10,6 +10,7 @@ function getPool() {
     return state.pool;
 }
 
+// Request a remote status endpoint with timeout and logging.
 function requestStatus(url, timeoutMs) {
     if (process.env.NODE_ENV === "test" && process.env.MOCK_REMOTE_STATUS === "true") {
         return Promise.resolve({
@@ -93,6 +94,7 @@ function requestStatus(url, timeoutMs) {
     });
 }
 
+// Run a simple query to verify database connectivity.
 async function checkDatabase() {
     const context = "db";
     const url = "database";

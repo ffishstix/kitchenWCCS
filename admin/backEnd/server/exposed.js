@@ -17,6 +17,7 @@ const {
 
 let accessLevelIdentity = null;
 
+// Cache whether accessAlowances.accessLevel is an IDENTITY column.
 async function isAccessLevelIdentity(dbPool) {
     if (accessLevelIdentity != null) return accessLevelIdentity;
     const result = await dbPool.request().query(`
@@ -26,6 +27,7 @@ async function isAccessLevelIdentity(dbPool) {
     return accessLevelIdentity;
 }
 
+// Normalize access flags into bit values or return null when invalid.
 function readAccessFlags(payload) {
     const source = payload?.access && typeof payload.access === "object" ? payload.access : payload;
     const flags = {
@@ -40,6 +42,7 @@ function readAccessFlags(payload) {
     return flags;
 }
 
+// Find or create an access level row matching the flags.
 async function resolveAccessLevel(dbPool, flags) {
     const existing = await dbPool
         .request()
@@ -99,6 +102,7 @@ async function resolveAccessLevel(dbPool, flags) {
     return nextLevel;
 }
 
+// Register admin API routes and handlers.
 function registerRoutes(app) {
     app.get("/", (req, res) => {
         res.sendFile(indexPath);

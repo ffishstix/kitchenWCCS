@@ -1,3 +1,4 @@
+// Query categories by search term and render the list.
 async function searchCategoriesManager() {
     const term = categorySearchInput.value.trim();
     categoryResults.innerHTML = `<li class="muted">Searching...</li>`;
@@ -21,6 +22,7 @@ async function searchCategoriesManager() {
     }
 }
 
+// Create a category and apply any pending item assignments.
 async function createCategory(useTemplate = null) {
     const fromTemplate = useTemplate === null ? state.createMode.category : useTemplate;
     const name = (fromTemplate
@@ -87,6 +89,7 @@ function updateCategoryCreateButtons() {
     if (templateButton) templateButton.disabled = !ready;
 }
 
+// Render the new-category form and wire its controls.
 function renderCategoryCreateTemplate() {
     state.createMode.category = true;
     state.selectedCategoryId = null;
@@ -132,6 +135,7 @@ function renderCategoryCreateTemplate() {
     wireCategoryCreateTemplate();
 }
 
+// Bind handlers for the category creation template.
 function wireCategoryCreateTemplate() {
     const nameInput = document.getElementById("category-new-name");
     const colourInput = document.getElementById("category-new-colour");
@@ -212,6 +216,7 @@ function activateCategoryCreateTemplate() {
     syncCategoryCreateFromLeft();
 }
 
+// Load a category and render its detail view.
 async function selectCategory(categoryId) {
     state.createMode.category = false;
     state.selectedCategoryId = categoryId;
@@ -232,6 +237,7 @@ async function selectCategory(categoryId) {
     }
 }
 
+// Render the category editor with its item assignments.
 function renderCategoryDetail(category, items = []) {
     state.createMode.category = false;
     state.currentCategory = category;
@@ -436,6 +442,7 @@ function categoryHasChanges(payload, currentCategory) {
         || payload.extraCatInfo !== currentExtra;
 }
 
+// Persist category edits and refresh the detail view.
 async function saveCategoryChanges(categoryId) {
     const payload = getCategoryEditorPayload();
     if (!payload) return;

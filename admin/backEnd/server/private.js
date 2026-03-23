@@ -21,6 +21,7 @@ function getPool() {
     return state.pool;
 }
 
+// Ensure the auth token table is created once and cache the init promise.
 async function ensureAuthReady() {
     if (!state.authTableReady) {
         state.authTableReady = (async () => {
@@ -38,6 +39,7 @@ async function ensureAuthReady() {
     }
 }
 
+// Periodically remove expired auth tokens.
 function startTokenCleanupLoop() {
     setInterval(async () => {
         try {
@@ -73,6 +75,7 @@ function getAuthToken(req) {
         || readCookie(req, "authToken");
 }
 
+// Validate auth token expiry and delete it if expired.
 async function validateAuthToken(token) {
     if (!token) return {ok: false, status: 401, error: "Missing auth token"};
 
@@ -89,6 +92,7 @@ async function validateAuthToken(token) {
     return {ok: true};
 }
 
+// Express middleware to enforce auth and attach the token.
 async function requireAuth(req, res, next) {
     try {
         const token = getAuthToken(req);
