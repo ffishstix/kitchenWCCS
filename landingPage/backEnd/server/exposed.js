@@ -2,6 +2,7 @@ const {
     indexPath,
     DISPLAY_URL,
     ADMIN_URL,
+    PORTFOLIO_URL,
     STATUS_CACHE_MS,
     REQUEST_TIMEOUT_MS
 } = require("./constants");
@@ -20,13 +21,15 @@ function registerRoutes(app) {
             return;
         }
 
-        const [display, admin, database] = await Promise.all([
+        const [portfolio, display, admin, database] = await Promise.all([
+            requestStatus(PORTFOLIO_URL, REQUEST_TIMEOUT_MS),
             requestStatus(DISPLAY_URL, REQUEST_TIMEOUT_MS),
             requestStatus(ADMIN_URL, REQUEST_TIMEOUT_MS),
             checkDatabase()
         ]);
 
         state.statusCache = {
+            portfolio,
             display,
             admin,
             database,

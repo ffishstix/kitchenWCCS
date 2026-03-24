@@ -22,14 +22,16 @@ function formatEntry(name, entry) {
 }
 
 function applyStatus(data) {
+    const portfolioOk = Boolean(data?.portfolio?.ok);
     const displayOk = Boolean(data?.display?.ok);
     const adminOk = Boolean(data?.admin?.ok);
     const dbOk = Boolean(data?.database?.ok);
-    const anyOk = displayOk || adminOk || dbOk;
-    const allOk = displayOk && adminOk && dbOk;
+    const anyOk = portfolioOk || displayOk || adminOk || dbOk;
+    const allOk = portfolioOk && displayOk && adminOk && dbOk;
 
     const details = [
-        formatEntry("Display", data?.display),
+        formatEntry("Portfolio", data?.portfolio),
+        formatEntry("Kitchen", data?.display),
         formatEntry("Admin", data?.admin),
         formatEntry("DB", data?.database)
     ];

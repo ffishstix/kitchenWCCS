@@ -2,7 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const port = 3000;
+const port = 1250;
 
 http.createServer((req, res) => {
     const timestamp = new Date().toISOString();
@@ -10,7 +10,10 @@ http.createServer((req, res) => {
     console.log(`[${timestamp}] Method: ${req.method}, URL: ${req.url}`);
     console.log(`[${timestamp}] Headers: `, req.headers);
 
-    let filePath = req.url === '/' ? './index.html' : `.${req.url}`;
+    let filePath = req.url === '/' ? 'index.html' : req.url.replace(/^\/+/, '');
+    if (req.url === '/favicon.ico') {
+        filePath = 'assets/favicon.ico';
+    }
 
     if (req.url === '/api/getLastLogin') {
         fs.readFile('lastDate.txt', 'utf8', (err, data) => {
@@ -76,10 +79,18 @@ http.createServer((req, res) => {
             contentType = 'text/html';
     }
 
-    fs.readFile(filePath, (err, content) => {
+    const absolutePath = path.resolve(__dirname, filePath);
+    if (!absolutePath.startsWith(__dirname)) {
+        console.error(`[${timestamp}] 403 Forbidden: ${absolutePath}`);
+        res.writeHead(403, {'Content-Type': 'text/html'});
+        res.end('<h1>403 Forbidden</h1>', 'utf-8');
+        return;
+    }
+
+    fs.readFile(absolutePath, (err, content) => {
         if (err) {
             if (err.code === 'ENOENT') {
-                console.error(`[${timestamp}] 404 Not Found: ${filePath}`);
+                console.error(`[${timestamp}] 404 Not Found: ${absolutePath}`);
                 res.writeHead(404, {'Content-Type': 'text/html'});
                 res.end('<h1>404 Not Found</h1>', 'utf-8');
             } else {

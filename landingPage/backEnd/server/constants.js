@@ -11,6 +11,7 @@ const indexPath = path.resolve(__dirname, "..", "..", "frontEnd", "index.html");
 const publicPath = path.resolve(__dirname, "..", "..", "frontEnd", "public");
 const DISPLAY_URL = process.env.DISPLAY_URL || "https://display.fishstix.uk";
 const ADMIN_URL = process.env.ADMIN_URL || "https://admin.fishstix.uk";
+const PORTFOLIO_URL = process.env.PORTFOLIO_URL || "http://localhost:1250";
 const STATUS_CACHE_MS = 10000;
 const REQUEST_TIMEOUT_MS = 4000;
 
@@ -56,6 +57,7 @@ module.exports = {
     publicPath,
     DISPLAY_URL,
     ADMIN_URL,
+    PORTFOLIO_URL,
     STATUS_CACHE_MS,
     REQUEST_TIMEOUT_MS,
     dbConfig

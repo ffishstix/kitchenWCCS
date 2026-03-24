@@ -124,6 +124,14 @@ body {
     animation: rise 0.8s ease-out both;
 }
 
+.hero-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+}
+
 .hero-copy h1 {
     font-family: "Space Grotesk", "IBM Plex Sans", sans-serif;
     font-size: clamp(34px, 4vw, 52px);
@@ -145,12 +153,48 @@ body {
     line-height: 1.6;
     color: var(--ink-soft);
     margin-bottom: 24px;
+    max-width: 560px;
+}
+
+.launch-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 18px;
+    margin-top: 24px;
+    width: 100%;
+}
+
+.launch-group {
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 20px;
+    padding: 20px;
+    border: 1px solid rgba(15, 36, 26, 0.08);
+    box-shadow: 0 16px 28px rgba(15, 36, 26, 0.1);
+    display: grid;
+    gap: 10px;
+    text-align: center;
+}
+
+.launch-group.portfolio {
+    background: linear-gradient(135deg, rgba(126, 217, 183, 0.25), rgba(255, 255, 255, 0.9));
+}
+
+.launch-title {
+    font-weight: 700;
+    font-size: 18px;
+}
+
+.launch-group p {
+    margin: 0;
+    color: var(--ink-soft);
+    line-height: 1.5;
 }
 
 .cta-row {
     display: flex;
     flex-wrap: wrap;
     gap: 16px;
+    justify-content: center;
 }
 
 .cta {
@@ -238,52 +282,6 @@ body {
 
 .metric-value.muted {
     color: rgba(15, 36, 26, 0.45);
-}
-
-.link-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 18px;
-}
-
-.link-card {
-    background: rgba(255, 255, 255, 0.75);
-    border-radius: 18px;
-    padding: 20px;
-    text-decoration: none;
-    color: var(--ink);
-    border: 1px solid rgba(15, 36, 26, 0.08);
-    box-shadow: 0 12px 24px rgba(15, 36, 26, 0.08);
-    display: grid;
-    gap: 10px;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    animation: fadeIn 0.9s ease both;
-}
-
-.link-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 16px 26px rgba(15, 36, 26, 0.12);
-}
-
-.link-card.muted {
-    background: rgba(255, 255, 255, 0.55);
-    color: rgba(15, 36, 26, 0.6);
-}
-
-.link-title {
-    font-weight: 700;
-    font-size: 18px;
-}
-
-.link-card p {
-    margin: 0;
-    color: inherit;
-    line-height: 1.5;
-}
-
-.link-arrow {
-    font-weight: 600;
-    color: var(--accent-deep);
 }
 
 .glow {
