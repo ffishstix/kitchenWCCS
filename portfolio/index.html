@@ -1,0 +1,76 @@
+<!--
+complete credit to https://projects.bugra.work/console/
+big thanks to my server provider: disc: cratig #this is not their job just a nice thing they did for me
+i saw this idea from one of my friends actually, so partial credit to:
+https://web.moritz.移动/   disc: wixxer
+
+-->
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        .username {
+            color: green;
+        }
+
+        .tilde {
+            color: blue;
+        }
+    </style>
+
+
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="./assets/favicon.ico">
+    <title>fish_stix Command Prompt</title>
+    <link rel="stylesheet" href="./assets/app.css">
+    <link src="./assets/basec.css" rel="stylesheet"/>
+</head>
+<body>
+
+
+<div class="window" id="draggable">
+    <div class="tab-area">
+        <div class="title">
+            <div class="divv">
+                <img src="./assets/4.png" class="icon">
+
+            </div>
+            <p class="title-2">Console</p>
+        </div>
+        <div class="cursor-pointer">
+            <img src="./assets/maximize.png" class="maxi">
+            <img src="./assets/close-button.png" class="closeb">
+        </div>
+    </div>
+    <div class="window-inside">
+        <p id="browser-info"></p>
+        <p>full credit goes to <a href="https://projects.bugra.work/console/">bugra.work</a></p>
+        <p><br></p>
+        <p>C:\Users\fin>ssh guest@fishstix.uk</p>
+        <p class="inline">guest@fishstix.uk's password:</p>
+        <p class="pass inline" name="pass"></p>
+        <p><br></p>
+        <p id="last-login">Last login:</p>
+        <div class="prepend"></div>
+        <form onsubmit="return false;" id="command-form" class="group">
+            <div class="command-area">
+                <span class="fix-span"><span class="username">guest@fishstix.uk</span>:<span
+                        class="tilde">~</span>$</span>
+                <input type="text" name="command" class="commandline" tabindex="1" autocomplete="off" autofocus/>
+                <span id="placeholder"></span>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+</body>
+<footer>
+    <script src="./assets/date.js"></script>
+    <script src="./assets/base.js"></script>
+    <script type="module" src="./assets/app.js"></script>
+    <script src="./assets/drag.js"></script>
+</footer>
+</html>
