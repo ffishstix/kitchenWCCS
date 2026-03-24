@@ -86,6 +86,7 @@ async function searchReportItems() {
     }
 }
 
+// Render report rows and summary totals.
 function renderReportResults(items) {
     if (!items.length) {
         reportTableBody.innerHTML = `<tr><td colspan="5" class="muted">No results for this selection.</td></tr>`;
@@ -118,6 +119,7 @@ function renderReportResults(items) {
     reportSummary.textContent = `Total sold: ${totalSold} \u00B7 Revenue: ${formatPrice(totalRevenue)}`;
 }
 
+// Build query params, run the report, and render results.
 async function runReport() {
     const params = new URLSearchParams();
     if (reportStartInput.value) params.set("start", `${reportStartInput.value}T00:00:00`);
@@ -143,6 +145,7 @@ async function runReport() {
     }
 }
 
+// Reset report filters to the default date range.
 function clearReportFilters() {
     const today = new Date();
     const weekAgo = new Date(today);

@@ -1,3 +1,4 @@
+// Query staff by search term and render the list.
 async function searchStaff() {
     const term = staffSearchInput.value.trim();
     staffResults.innerHTML = `<li class="muted">Searching...</li>`;
@@ -115,6 +116,7 @@ function renderStaffCreateOptions() {
     updateStaffCreateButtons();
 }
 
+// Create a staff member with access settings and refresh the list.
 async function createStaff(useTemplate = null) {
     const fromTemplate = useTemplate === null ? state.createMode.staff : useTemplate;
     ensureStaffAccessDraft();
@@ -175,6 +177,7 @@ function updateStaffCreateButtons() {
     if (templateButton) templateButton.disabled = !ready;
 }
 
+// Render the new-staff form and wire its controls.
 function renderStaffCreateTemplate() {
     state.createMode.staff = true;
     state.selectedStaffId = null;
@@ -266,6 +269,7 @@ function activateStaffCreateTemplate() {
     syncStaffCreateFromLeft();
 }
 
+// Load a staff member and render their detail view.
 async function selectStaff(staffId) {
     state.createMode.staff = false;
     state.selectedStaffId = staffId;
@@ -279,6 +283,7 @@ async function selectStaff(staffId) {
     renderStaffDetail(member);
 }
 
+// Render the staff editor with access level controls.
 function renderStaffDetail(member) {
     state.createMode.staff = false;
     const accessValues = getAccessValuesForLevel(member.accessLevel) || defaultAccessValues();
@@ -390,6 +395,7 @@ async function deleteStaff(staffId) {
     }
 }
 
+// Load access levels for staff permissions.
 async function loadAccessLevels() {
     try {
         const data = await api("/api/access-levels");

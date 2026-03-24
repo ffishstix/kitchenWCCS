@@ -1,3 +1,4 @@
+// Query allergies by search term and render the list.
 async function searchAllergiesManager() {
     const term = allergySearchInput.value.trim();
     const sort = allergySortSelect.value || "name";
@@ -22,6 +23,7 @@ async function searchAllergiesManager() {
     }
 }
 
+// Create an allergy and apply any pending item assignments.
 async function createAllergy(useTemplate = null) {
     const fromTemplate = useTemplate === null ? state.createMode.allergy : useTemplate;
     const name = (fromTemplate
@@ -76,6 +78,7 @@ function updateAllergyCreateButtons() {
     if (templateButton) templateButton.disabled = !ready;
 }
 
+// Render the new-allergy form and wire its controls.
 function renderAllergyCreateTemplate() {
     state.createMode.allergy = true;
     state.selectedAllergyId = null;
@@ -111,6 +114,7 @@ function renderAllergyCreateTemplate() {
     wireAllergyCreateTemplate();
 }
 
+// Bind handlers for the allergy creation template.
 function wireAllergyCreateTemplate() {
     const nameInput = document.getElementById("allergy-new-name");
     const createButton = document.getElementById("allergy-template-create");
@@ -182,6 +186,7 @@ function activateAllergyCreateTemplate() {
     syncAllergyCreateFromLeft();
 }
 
+// Load an allergy and render its detail view.
 async function selectAllergy(allergyId) {
     state.createMode.allergy = false;
     state.selectedAllergyId = allergyId;
@@ -202,6 +207,7 @@ async function selectAllergy(allergyId) {
     }
 }
 
+// Render the allergy editor with its item assignments.
 function renderAllergyDetail(allergy, items = []) {
     state.createMode.allergy = false;
     state.currentAllergy = allergy;
@@ -334,6 +340,7 @@ function allergyHasChanges(name, currentAllergy) {
     return name !== currentName;
 }
 
+// Persist allergy edits and refresh the detail view.
 async function saveAllergyChanges(allergyId) {
     const name = getAllergyEditorName();
     if (name == null) return;

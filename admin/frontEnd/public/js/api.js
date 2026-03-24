@@ -27,6 +27,7 @@ function clearAuthCookie() {
     document.cookie = "authToken=; path=/; max-age=0";
 }
 
+// Send a JSON API request and normalize error handling.
 async function api(path, options = {}) {
     const headers = Object.assign({"Content-Type": "application/json"}, options.headers || {});
     if (state.token) headers["X-Auth-Token"] = state.token;
@@ -75,6 +76,7 @@ function fallbackHash(msg, options) {
     return raa255.hash(msg, options);
 }
 
+// Custom hash implementation used for client-side credential hashing.
 class raa255 {
     static hash(msg, options) {
         const defaults = {msgFormat: "string", outFormat: "hex"};
@@ -252,6 +254,7 @@ class raa255 {
     }
 }
 
+// Perform login and initialize the session state.
 async function attemptLogin() {
     authAttempt += 1;
     const username = usernameInput.value.trim();
@@ -294,6 +297,7 @@ async function attemptLogin() {
     }
 }
 
+// Restore a saved session token and load data if valid.
 async function attemptAutoLogin() {
     const token = getCookie("authToken");
     if (!token) {

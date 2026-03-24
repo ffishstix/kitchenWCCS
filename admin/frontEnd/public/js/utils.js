@@ -96,6 +96,7 @@ function getCategoryOpenSet(categoryId) {
     return set;
 }
 
+// Build the color picker markup with the current selection.
 function buildColorPicker(id, currentValue) {
     const current = String(currentValue || "").trim();
     const invalid = current && !isValidColorName(current);
@@ -142,6 +143,7 @@ function closeAllColorPickers() {
     });
 }
 
+// Wire the color picker interactions for a specific field.
 function initColorPicker(id) {
     const picker = document.querySelector(`.color-picker[data-picker="${id}"]`);
     if (!picker) return;
@@ -195,6 +197,7 @@ function resetColorPicker(id) {
     if (swatch) swatch.style.background = "transparent";
 }
 
+// Track edits and debounce save calls for a container.
 function attachAutoSave(container, saveFn, shouldSave = null, debounceMs = 250) {
     if (!container || typeof saveFn !== "function") return;
     if (container._autoSaveCleanup) {

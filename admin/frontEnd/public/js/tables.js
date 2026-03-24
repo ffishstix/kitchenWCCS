@@ -53,6 +53,7 @@ function getOldestOpenMs(tables) {
     return oldest;
 }
 
+// Render the summary cards for open tables.
 function renderOpenTableSummary(tables) {
     if (!openTableSummary) return;
     if (!Array.isArray(tables)) {
@@ -97,6 +98,7 @@ function isOpenTableStale(sentDateTime) {
     return Date.now() - ms > 45 * 60 * 1000;
 }
 
+// Render the open tables list with the active filter.
 function renderOpenTables() {
     if (!openTableBody) return;
     const tables = Array.isArray(state.openTables) ? state.openTables : [];
@@ -158,6 +160,7 @@ function renderOpenTables() {
         .join("");
 }
 
+// Fetch open tables and refresh the view.
 async function loadOpenTables() {
     if (!openTableBody) return;
     openTableBody.innerHTML = `<tr><td colspan="7" class="muted">Loading...</td></tr>`;
@@ -174,6 +177,7 @@ async function loadOpenTables() {
     }
 }
 
+// Close a table when the action button is confirmed.
 async function handleOpenTableClick(event) {
     const button = event.target.closest("button[data-finish-id]");
     if (!button) return;

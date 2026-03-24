@@ -9,6 +9,7 @@ const {
 const {dbConfig, TOKEN_CLEANUP_INTERVAL_MS} = require("./constants");
 const {state, wss} = require("./state");
 
+// Broadcast a refresh message to all connected clients.
 function broadcastRefresh() {
     const payload = JSON.stringify({type: "refresh"});
     for (const client of wss.clients) {
@@ -65,6 +66,7 @@ function getActionAuth(req) {
     return {authToken, actionKey};
 }
 
+// Validate action auth token, action key, and connection state.
 function validateActionAuth(authToken, actionKey) {
     if (!authToken || !actionKey) {
         logWith("warn", "action", "Missing auth", {hasToken: Boolean(authToken), hasActionKey: Boolean(actionKey)});
@@ -98,6 +100,7 @@ async function getPool() {
     return state.pool;
 }
 
+// Ensure the auth token table is created once and cache the init promise.
 async function ensureAuthReady() {
     if (!state.authTableReady) {
         state.authTableReady = (async () => {
@@ -115,6 +118,7 @@ async function ensureAuthReady() {
     }
 }
 
+// Periodically remove expired auth tokens.
 function startTokenCleanupLoop() {
     setInterval(async () => {
         try {
@@ -130,6 +134,7 @@ function startTokenCleanupLoop() {
     }, TOKEN_CLEANUP_INTERVAL_MS);
 }
 
+// Validate socket auth token and prune expired tokens.
 async function validateSocketToken(token) {
     await ensureAuthReady();
     const dbPool = await getPool();
@@ -168,6 +173,7 @@ function resolveOrderUnfinishAt(orderId) {
     return "";
 }
 
+// Fetch active kitchen items with derived timestamps.
 async function getFoodToBeMade() {
     const pool = await getPool();
 
@@ -199,6 +205,7 @@ async function getFoodToBeMade() {
     }));
 }
 
+// Fetch active kitchen items after the last order line id.
 async function getFoodToBeMadeSince(lastOrderLineId) {
     const pool = await getPool();
 
@@ -233,6 +240,7 @@ async function getFoodToBeMadeSince(lastOrderLineId) {
     }));
 }
 
+// Fetch completed kitchen items with derived timestamps.
 async function getCompletedFood() {
     const pool = await getPool();
 
@@ -264,6 +272,7 @@ async function getCompletedFood() {
     }));
 }
 
+// Fetch completed kitchen items after the last order line id.
 async function getCompletedFoodSince(lastOrderLineId) {
     const pool = await getPool();
 
@@ -308,6 +317,7 @@ function getMaxOrderLineId(items, fallback) {
     return max;
 }
 
+// Compare order lists by stable keys instead of object identity.
 function listsMatch(serverItems, clientItems) {
     if (!Array.isArray(serverItems) || !Array.isArray(clientItems)) return false;
     if (serverItems.length !== clientItems.length) return false;
@@ -321,6 +331,7 @@ function listsMatch(serverItems, clientItems) {
     return true;
 }
 
+// Build a stable key for list comparison.
 function makeOrderKey(item) {
     const orderLineId = Number(item?.orderLineId);
     if (Number.isInteger(orderLineId)) {
@@ -338,6 +349,7 @@ function makeOrderKey(item) {
     ].join("|");
 }
 
+// Mark a header as finished and clear unfinish overrides.
 async function finishOrder(orderId) {
     const id = Number(orderId);
     if (!Number.isInteger(id)) return;
@@ -350,6 +362,7 @@ async function finishOrder(orderId) {
 
 }
 
+// Mark a header as unfinished and record the override time.
 async function unfinishOrder(orderId) {
     const id = Number(orderId);
     if (!Number.isInteger(id)) return;

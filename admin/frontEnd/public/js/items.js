@@ -1,3 +1,4 @@
+// Query items by search term and render the list.
 async function searchItems() {
     const term = itemSearchInput.value.trim();
     itemResults.innerHTML = `<li class="muted">Searching...</li>`;
@@ -21,6 +22,7 @@ async function searchItems() {
     }
 }
 
+// Validate input, create an item, and refresh selection.
 async function createItem(useTemplate = null) {
     const fromTemplate = useTemplate === null ? state.createMode.item : useTemplate;
     const name = (fromTemplate
@@ -88,6 +90,7 @@ function updateItemCreateButtons() {
     if (templateButton) templateButton.disabled = !ready;
 }
 
+// Render the new-item form and wire its controls.
 function renderItemCreateTemplate() {
     state.createMode.item = true;
     state.selectedItemId = null;
@@ -254,6 +257,7 @@ async function refreshItemDetail(itemId, target = "main") {
     }
 }
 
+// Persist editor changes and attach an undo action.
 async function saveItemFromEditor(prefix, itemId, currentItem, refreshFn) {
     const snapshot = getItemEditorSnapshot(prefix);
     if (!snapshot) return;
@@ -442,6 +446,7 @@ function attachAllergyChipRemoval(container, itemId, refreshFn) {
     });
 }
 
+// Attach editor handlers for save, delete, and tag changes.
 function wireItemEditor(prefix, item, categories, allergies, refreshFn) {
     initColorPicker(`${prefix}-colour`);
     const categorySearch = document.getElementById(`${prefix}-category-search`);
@@ -527,6 +532,7 @@ function wireItemEditor(prefix, item, categories, allergies, refreshFn) {
     }
 }
 
+// Render an inline item editor and enable autosave.
 async function renderInlineItemEditor(container, itemId, categoryId = null) {
     container.innerHTML = `<div class="detail-empty">Loading item...</div>`;
     try {
@@ -574,6 +580,7 @@ async function renderInlineItemEditor(container, itemId, categoryId = null) {
     }
 }
 
+// Render the main item editor and enable autosave.
 function renderItemDetail(item, categories, allergies) {
     state.createMode.item = false;
     state.selectedCategoryId = null;

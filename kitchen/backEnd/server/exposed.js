@@ -23,6 +23,7 @@ const {
     unfinishOrder
 } = require("./private");
 
+// Register kitchen HTTP routes for login and order actions.
 function registerRoutes(app) {
     app.get("/", (req, res) => {
         res.sendFile(indexPath);
@@ -118,6 +119,7 @@ function registerRoutes(app) {
     });
 }
 
+// Register WebSocket handlers for order feed sync and updates.
 function registerWebSocketHandlers() {
     wss.on("connection", async (ws, req) => {
         const requestUrl = new URL(req.url || "/", "http://localhost");
